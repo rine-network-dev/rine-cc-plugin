@@ -13,6 +13,11 @@ source "$PLUGIN_ROOT/scripts/lib/resolve-config-dir.sh"
 source "$PLUGIN_ROOT/scripts/lib/find-cc-pid.sh"
 resolve_config_dir
 
+if [[ -z "$RINE_HAS_CREDS" ]]; then
+    echo "error: no rine credentials found. Run /rine-setup first." >&2
+    exit 1
+fi
+
 STATE_DIR="$RINE_DIR/state"
 LOGS_DIR="$STATE_DIR/logs"
 mkdir -p "$STATE_DIR" "$LOGS_DIR" "$STATE_DIR/sessions"
@@ -28,6 +33,16 @@ case "$ACTION" in
         touch "$STATE_DIR/sessions/${CC_PID}.alive"
         nohup "$PLUGIN_ROOT/scripts/daemon.sh" </dev/null >>"$LOGS_DIR/daemon-spawn.log" 2>&1 &
         disown || true
+        sleep 0.5
+        LOCK="$STATE_DIR/daemon.lock"
+        if flock -n "$LOCK" true 2>/dev/null; then
+            echo "error: daemon failed to start. Check logs:" >&2
+            tail -5 "$LOGS_DIR/daemon.err" 2>/dev/null >&2 || true
+            tail -5 "$LOGS_DIR/daemon.log" 2>/dev/null >&2 || true
+            rm -rf "${STATE_DIR:?}/events/$CC_PID"
+            rm -f "${STATE_DIR:?}/sessions/${CC_PID}.alive"
+            exit 1
+        fi
         echo "activated for pid=$CC_PID"
         ;;
     off)

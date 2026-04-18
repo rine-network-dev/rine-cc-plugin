@@ -33,16 +33,28 @@ if ! flock -n 9; then
 fi
 _log "acquired lock, starting"
 
+# Resolve full path to `rine` — only the flock winner needs this.
+# The setsid subshell is non-interactive/non-login and won't inherit PATH
+# from version managers (nvm, mise, etc.).
+RINE_BIN="$(command -v rine 2>/dev/null || true)"
+if [[ -z "$RINE_BIN" ]]; then
+    _log "FATAL: rine binary not found on PATH"
+    exit 1
+fi
+
 # ---- SSE reader in its own process group ----
 # Broadcast: each incoming message line is written to opted-in sessions'
 # events/<pid>/ directories (only those that exist). Non-message events
 # (lifecycle, heartbeat) are filtered out.
-setsid bash -c '
-    SESSIONS_DIR="'"$SESSIONS_DIR"'"
-    EVENTS_DIR="'"$EVENTS_DIR"'"
-    STATE_DIR="'"$STATE_DIR"'"
-    LOGS_DIR="'"$LOGS_DIR"'"
-    exec rine --json stream --persistent 2>>"$LOGS_DIR/daemon.err" | while IFS= read -r line; do
+setsid env \
+    SESSIONS_DIR="$SESSIONS_DIR" \
+    EVENTS_DIR="$EVENTS_DIR" \
+    STATE_DIR="$STATE_DIR" \
+    LOGS_DIR="$LOGS_DIR" \
+    RINE_BIN="$RINE_BIN" \
+  bash -c '
+    exec 9>&-
+    exec "$RINE_BIN" --json stream --persistent 2>>"$LOGS_DIR/daemon.err" | while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         # Filter: only broadcast message events, skip lifecycle/heartbeat.
         if ! echo "$line" | grep -q "\"event\":\"message\"" 2>/dev/null; then

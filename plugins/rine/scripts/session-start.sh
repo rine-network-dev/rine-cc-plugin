@@ -90,6 +90,13 @@ STATEOF
         # Spawn daemon (flock-arbitrated; losers exit 0 fast).
         nohup "$PLUGIN_ROOT/scripts/daemon.sh" </dev/null >>"$LOGS_DIR/daemon-spawn.log" 2>&1 &
         disown || true
+        if [[ -n "${RINE_NOTIFY:-}" ]]; then
+            sleep 0.5
+            LOCK="$STATE_DIR/daemon.lock"
+            if flock -n "$LOCK" true 2>/dev/null; then
+                _log "WARN daemon failed to start (lock not held after spawn)"
+            fi
+        fi
         ;;
 
     unregistered)

@@ -46,7 +46,8 @@ If the user typed `/rine-notify` or `/rine-notify on`:
    ```bash
    $CLAUDE_PLUGIN_ROOT/scripts/notify-toggle.sh on
    ```
-4. Tell the user: **"Notifications enabled — active now for this session and persisted for future sessions."**
+   If the script exits non-zero, report the error output to the user instead of confirming. Common causes: no rine credentials (run /rine-setup first), daemon failed to start.
+4. If the toggle succeeded, tell the user: **"Notifications enabled — active now for this session and persisted for future sessions."**
 
 ### 3. Toggle on (global)
 
