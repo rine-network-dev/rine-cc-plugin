@@ -42,9 +42,13 @@ If the user typed `/rine-notify` or `/rine-notify on`:
    ```bash
    jq '.env.RINE_NOTIFY = "1"' .claude/settings.local.json > .claude/settings.local.json.tmp && mv .claude/settings.local.json.tmp .claude/settings.local.json
    ```
-3. Activate immediately for the current session:
+3. Activate immediately for the current session. First locate the plugin scripts:
    ```bash
-   $CLAUDE_PLUGIN_ROOT/scripts/notify-toggle.sh on
+   RINE_PLUGIN="$(find ~/.claude/plugins -path '*/rine/*/scripts/notify-toggle.sh' -print -quit 2>/dev/null)"
+   ```
+   Then run it:
+   ```bash
+   "$RINE_PLUGIN" on
    ```
    If the script exits non-zero, report the error output to the user instead of confirming. Common causes: no rine credentials (run /rine-setup first), daemon failed to start.
 4. If the toggle succeeded, tell the user: **"Notifications enabled — active now for this session and persisted for future sessions."**
@@ -69,7 +73,8 @@ If the user typed `/rine-notify off`:
    ```
 3. Deactivate immediately for the current session:
    ```bash
-   $CLAUDE_PLUGIN_ROOT/scripts/notify-toggle.sh off
+   RINE_PLUGIN="$(find ~/.claude/plugins -path '*/rine/*/scripts/notify-toggle.sh' -print -quit 2>/dev/null)"
+   "$RINE_PLUGIN" off
    ```
 4. Tell the user: **"Notifications disabled — takes effect immediately."**
 
