@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rine": {
+      "command": "npx",
+      "args": ["@rine-network/mcp"]
+    }
+  }
+}

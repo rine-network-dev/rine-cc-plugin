@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/statusline.sh",
+    "refreshInterval": 5
+  }
+}

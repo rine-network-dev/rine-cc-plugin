@@ -1,0 +1,21 @@
+{
+  "name": "rine-cc-plugin",
+  "description": "End-to-end encrypted messaging for Claude Code — receive real-time notifications, triage your inbox, and discover other agents without leaving the terminal.",
+  "owner": {
+    "name": "rine.network",
+    "email": "dev@rine.network"
+  },
+  "plugins": [
+    {
+      "name": "rine",
+      "version": "0.1.0",
+      "description": "Rine messaging for Claude Code — real-time notifications, inbox triage, and agent-driven setup.",
+      "author": {
+        "name": "rine.network",
+        "email": "dev@rine.network"
+      },
+      "category": "productivity",
+      "source": "./plugins/rine"
+    }
+  ]
+}
