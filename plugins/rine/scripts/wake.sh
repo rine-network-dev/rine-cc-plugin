@@ -36,15 +36,17 @@ _list_events() {
     find "$EVENTS_DIR" -maxdepth 1 -type f -name '*.txt' -printf '%f\n' 2>/dev/null | sort
 }
 
-_drain_all() {
+declare -A ALL_SENDERS
+TOTAL_DRAINED=0
+
+_drain_batch() {
     local files count=0
-    local -A senders
     files="$(_list_events)"
     [[ -z "$files" ]] && return 1
 
     while IFS= read -r fname; do
         [[ -z "$fname" ]] && continue
-        local claimed="$EVENTS_DIR/.claiming-$$-$count"
+        local claimed="$EVENTS_DIR/.claiming-$$-$TOTAL_DRAINED"
         mv "$EVENTS_DIR/$fname" "$claimed" 2>/dev/null || continue
 
         local content sender_handle
@@ -55,21 +57,25 @@ _drain_all() {
             sender_handle="$(echo "$content" | jq -r '.data | fromjson | .sender_handle // empty' 2>/dev/null || true)"
         fi
         sender_handle="${sender_handle:-unknown}"
-        senders["$sender_handle"]=$(( ${senders["$sender_handle"]:-0} + 1 ))
+        ALL_SENDERS["$sender_handle"]=$(( ${ALL_SENDERS["$sender_handle"]:-0} + 1 ))
+        TOTAL_DRAINED=$((TOTAL_DRAINED + 1))
         count=$((count + 1))
     done <<< "$files"
 
     [[ $count -eq 0 ]] && return 1
     _log "drained $count event(s)"
+    return 0
+}
 
-    # Build summary for Claude.
-    if [[ $count -eq 1 ]]; then
-        local sole_sender="${!senders[@]}"
+_report() {
+    [[ $TOTAL_DRAINED -eq 0 ]] && return
+    if [[ $TOTAL_DRAINED -eq 1 ]]; then
+        local sole_sender="${!ALL_SENDERS[@]}"
         printf '[rine] new message from %s\n' "$sole_sender" >&2
     else
-        printf '[rine] %d new messages:\n' "$count" >&2
-        for sender in "${!senders[@]}"; do
-            local n="${senders[$sender]}"
+        printf '[rine] %d new messages:\n' "$TOTAL_DRAINED" >&2
+        for sender in "${!ALL_SENDERS[@]}"; do
+            local n="${ALL_SENDERS[$sender]}"
             if [[ $n -eq 1 ]]; then
                 printf '  • %s\n' "$sender" >&2
             else
@@ -77,13 +83,14 @@ _drain_all() {
             fi
         done
     fi
-    return 0
 }
 
 _log "triggered"
 
-# Fast path: drain everything already pending.
-if _drain_all; then
+# Fast path: drain everything already pending, then re-drain to batch bursts.
+if _drain_batch; then
+    while sleep 0.5 && _drain_batch; do :; done
+    _report
     exit 2
 fi
 
@@ -100,7 +107,9 @@ else
     done
 fi
 
-if _drain_all; then
+if _drain_batch; then
+    while sleep 0.5 && _drain_batch; do :; done
+    _report
     exit 2
 fi
 
