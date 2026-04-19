@@ -22,9 +22,21 @@ resolve_config_dir
 STATE_DIR="$RINE_DIR/state"
 LOGS_DIR="$STATE_DIR/logs"
 SESSIONS_DIR="$STATE_DIR/sessions"
-mkdir -p "$STATE_DIR" "$LOGS_DIR" "$SESSIONS_DIR"
 
-_log() { echo "[session-start $(date -Is)] $*" >>"$LOGS_DIR/session-start.log"; }
+# Probe writability — sandboxed sessions (e.g. bubblewrap) may mount
+# the config dir read-only. In that case, skip all state writes but
+# still do mode detection, polling, and additionalContext.
+# N.B. mkdir -p is NOT sufficient: it no-ops on existing dirs even on
+# a read-only FS. We must attempt an actual file write.
+READONLY=""
+if mkdir -p "$STATE_DIR" "$LOGS_DIR" "$SESSIONS_DIR" 2>/dev/null \
+   && touch "$STATE_DIR/.write-probe" 2>/dev/null; then
+    rm -f "$STATE_DIR/.write-probe"
+    _log() { echo "[session-start $(date -Is)] $*" >>"$LOGS_DIR/session-start.log"; }
+else
+    READONLY="1"
+    _log() { :; }
+fi
 
 # ---- mode detection ----
 
@@ -56,10 +68,12 @@ case "$MODE" in
             COUNT="$(curl -sf --max-time 5 "$POLL_URL" 2>/dev/null | jq -r '.count // 0' 2>/dev/null || echo 0)"
         fi
 
-        # Write state file for statusline.
-        cat >"$STATE_DIR/poll-state.json" <<STATEOF
+        # Write state file for statusline (skip in read-only mode).
+        if [[ -z "$READONLY" ]]; then
+            cat >"$STATE_DIR/poll-state.json" <<STATEOF
 {"count":${COUNT},"updated_at":"$(date -Is)"}
 STATEOF
+        fi
 
         # Return additionalContext — mention /rine-notify when not opted in.
         if [[ "$COUNT" -gt 0 ]]; then
@@ -72,29 +86,31 @@ STATEOF
             echo "{\"additionalContext\":\"Rine is connected. Type /rine-notify to enable real-time message notifications for this project.\"}"
         fi
 
-        # Register this session and spawn the daemon.
-        CC_PID="$(find_cc_pid)" || true
-        if [[ -z "$CC_PID" ]]; then
-            _log "WARN could not locate claude PID; falling back to PPID=$PPID"
-            CC_PID="$PPID"
-        fi
+        # Session registration + daemon require writable state dir.
+        if [[ -z "$READONLY" ]]; then
+            CC_PID="$(find_cc_pid)" || true
+            if [[ -z "$CC_PID" ]]; then
+                _log "WARN could not locate claude PID; falling back to PPID=$PPID"
+                CC_PID="$PPID"
+            fi
 
-        touch "$SESSIONS_DIR/${CC_PID}.alive"
-        if [[ -n "${RINE_NOTIFY:-}" ]]; then
-            mkdir -p "$STATE_DIR/events/$CC_PID"
-            _log "registered session cc_pid=$CC_PID notify=on"
-        else
-            _log "registered session cc_pid=$CC_PID notify=off"
-        fi
+            touch "$SESSIONS_DIR/${CC_PID}.alive"
+            if [[ -n "${RINE_NOTIFY:-}" ]]; then
+                mkdir -p "$STATE_DIR/events/$CC_PID"
+                _log "registered session cc_pid=$CC_PID notify=on"
+            else
+                _log "registered session cc_pid=$CC_PID notify=off"
+            fi
 
-        # Spawn daemon (flock-arbitrated; losers exit 0 fast).
-        nohup "$PLUGIN_ROOT/scripts/daemon.sh" </dev/null >>"$LOGS_DIR/daemon-spawn.log" 2>&1 &
-        disown || true
-        if [[ -n "${RINE_NOTIFY:-}" ]]; then
-            sleep 0.5
-            LOCK="$STATE_DIR/daemon.lock"
-            if flock -n "$LOCK" true 2>/dev/null; then
-                _log "WARN daemon failed to start (lock not held after spawn)"
+            # Spawn daemon (flock-arbitrated; losers exit 0 fast).
+            nohup "$PLUGIN_ROOT/scripts/daemon.sh" </dev/null >>"$LOGS_DIR/daemon-spawn.log" 2>&1 &
+            disown || true
+            if [[ -n "${RINE_NOTIFY:-}" ]]; then
+                sleep 0.5
+                LOCK="$STATE_DIR/daemon.lock"
+                if flock -n "$LOCK" true 2>/dev/null; then
+                    _log "WARN daemon failed to start (lock not held after spawn)"
+                fi
             fi
         fi
         ;;
@@ -102,18 +118,21 @@ STATEOF
     unregistered)
         echo '{"additionalContext":"Rine CLI is installed but no identity is registered on this machine. You can invoke the rine-setup skill (or the user can type /rine-setup) to onboard — ask the user first, gather a handle and org name, then drive `rine onboard` via Bash."}'
 
-        # Write unknown state for statusline.
-        cat >"$STATE_DIR/poll-state.json" <<STATEOF
+        if [[ -z "$READONLY" ]]; then
+            cat >"$STATE_DIR/poll-state.json" <<STATEOF
 {"count":null,"updated_at":"$(date -Is)","mode":"unregistered"}
 STATEOF
+        fi
         ;;
 
     mcp-only)
         echo '{"additionalContext":"Rine plugin is in MCP-only mode — tools work on demand, but idle notifications are disabled because the rine CLI is not installed. Suggest the user install it (`npm i -g @rine-network/cli`), then type /rine-setup to register."}'
 
-        cat >"$STATE_DIR/poll-state.json" <<STATEOF
+        if [[ -z "$READONLY" ]]; then
+            cat >"$STATE_DIR/poll-state.json" <<STATEOF
 {"count":null,"updated_at":"$(date -Is)","mode":"mcp-only"}
 STATEOF
+        fi
         ;;
 esac
 

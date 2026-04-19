@@ -15,7 +15,13 @@ resolve_config_dir
 
 STATE_DIR="$RINE_DIR/state"
 LOGS_DIR="$STATE_DIR/logs"
-mkdir -p "$LOGS_DIR"
+
+# Read-only filesystem (sandbox) — daemon can't run, so nothing to drain.
+if ! mkdir -p "$LOGS_DIR" 2>/dev/null \
+   || ! touch "$LOGS_DIR/.write-probe" 2>/dev/null; then
+    exit 0
+fi
+rm -f "$LOGS_DIR/.write-probe"
 
 CC_PID="$(find_cc_pid)" || true
 if [[ -z "$CC_PID" ]]; then

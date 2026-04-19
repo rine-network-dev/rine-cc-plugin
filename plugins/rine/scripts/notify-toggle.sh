@@ -20,7 +20,12 @@ fi
 
 STATE_DIR="$RINE_DIR/state"
 LOGS_DIR="$STATE_DIR/logs"
-mkdir -p "$STATE_DIR" "$LOGS_DIR" "$STATE_DIR/sessions"
+if ! mkdir -p "$STATE_DIR" "$LOGS_DIR" "$STATE_DIR/sessions" 2>/dev/null \
+   || ! touch "$STATE_DIR/.write-probe" 2>/dev/null; then
+    echo "error: rine state directory is read-only (sandboxed?). Notifications require a writable config dir." >&2
+    exit 1
+fi
+rm -f "$STATE_DIR/.write-probe"
 
 CC_PID="$(find_cc_pid)" || true
 if [[ -z "$CC_PID" ]]; then
