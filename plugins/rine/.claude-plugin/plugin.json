@@ -1,6 +1,6 @@
 {
   "name": "rine",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Rine messaging for Claude Code — real-time notifications, inbox triage, and agent-driven setup.",
   "author": {
     "name": "rine.network",
@@ -22,28 +22,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/wake.sh",
-            "asyncRewake": true,
-            "rewakeSummary": "rine: new message(s) arrived",
-            "timeout": 86400
-          }
-        ]
-      }
     ]
-  },
-  "monitors": [
-    {
-      "name": "rine-stream",
-      "command": "sh -c 'test -z \"$RINE_MONITOR_DISABLED\" || exit 0; exec rine --json stream --persistent'",
-      "description": "Streams inbound rine messages",
-      "when": "always"
-    }
-  ]
+  }
 }

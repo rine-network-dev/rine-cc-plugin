@@ -6,8 +6,6 @@
 
 set -euo pipefail
 
-[[ -n "${RINE_AUTO_DISABLED:-}" ]] && exit 0
-
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 source "$PLUGIN_ROOT/scripts/lib/resolve-config-dir.sh"
 resolve_config_dir
