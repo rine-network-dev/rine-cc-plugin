@@ -27,7 +27,7 @@ COUNT="$(jq -r '.count // empty' "$STATE_FILE" 2>/dev/null || true)"
 if [[ -z "$COUNT" || "$COUNT" == "null" ]]; then
     echo "rine: ?"
 elif [[ "$COUNT" -eq 0 ]]; then
-    echo "rine: clear"
+    exit 0
 elif [[ "$COUNT" -eq 1 ]]; then
     echo "📬 1 unread (rine)"
 else

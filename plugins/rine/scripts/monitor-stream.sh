@@ -58,7 +58,7 @@ format_event() {
 }
 
 while true; do
-    "$RINE_BIN" --json stream --persistent 2>/dev/null | while IFS= read -r line; do
+    "$RINE_BIN" --json stream --persistent --monitor 2>/dev/null | while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         echo "$line" | grep -q '"event":"message"' 2>/dev/null || continue
 
