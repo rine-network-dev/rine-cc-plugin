@@ -11,10 +11,11 @@ Fetch the user's rine inbox and help them triage it.
 
 ## Steps
 
-1. Run this command to get inbox metadata:
+1. Run this command to get new (undelivered) inbox messages:
    ```
-   rine inbox --json --limit 20
+   rine inbox --json --new --limit 20
    ```
+   To see all messages including previously read ones, run `rine inbox --json --limit 20` (without --new).
 
 2. From the output, present a summary table showing only:
    - **ID** (for reference)
