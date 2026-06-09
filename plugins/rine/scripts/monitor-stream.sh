@@ -6,35 +6,28 @@
 #
 # Silence: touch $RINE_DIR/monitor-pause
 # Resume:  rm    $RINE_DIR/monitor-pause
+#
+# Backoff env overrides (all optional):
+#   RINE_MONITOR_BACKOFF_BASE    — initial delay in seconds (default 5)
+#   RINE_MONITOR_BACKOFF_MAX     — cap in seconds (default 300)
+#   RINE_MONITOR_MIN_HEALTHY     — seconds child must run to reset attempt counter (default 30)
+#   RINE_MONITOR_MAX_RESTARTS    — 0 = unlimited (default); >0 exits loop after N attempts
 
 set -uo pipefail
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-source "$PLUGIN_ROOT/scripts/lib/resolve-config-dir.sh"
-resolve_config_dir
-
-[[ -n "$RINE_HAS_CREDS" ]] || exit 0
-
-RINE_BIN="$(command -v rine 2>/dev/null || true)"
-[[ -n "$RINE_BIN" ]] || exit 0
-
-STATE_DIR="$RINE_DIR/state"
-PAUSE_FILE="$RINE_DIR/monitor-pause"
-mkdir -p "$STATE_DIR"
-
-trap 'kill 0 2>/dev/null; exit' TERM INT HUP
+# ── helper functions (defined before any side-effecting code) ───────────────
 
 bump_count() {
-    if [[ ! -f "$STATE_DIR/poll-state.json" ]]; then
+    if [[ ! -f "${STATE_DIR}/poll-state.json" ]]; then
         printf '{"count":1,"updated_at":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            >"$STATE_DIR/poll-state.json"
+            >"${STATE_DIR}/poll-state.json"
         return
     fi
     command -v jq >/dev/null 2>&1 || return 0
     local prev
-    prev="$(jq -r '.count // 0' "$STATE_DIR/poll-state.json" 2>/dev/null || echo 0)"
+    prev="$(jq -r '.count // 0' "${STATE_DIR}/poll-state.json" 2>/dev/null || echo 0)"
     printf '{"count":%d,"updated_at":"%s"}\n' "$((prev + 1))" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        >"$STATE_DIR/poll-state.json"
+        >"${STATE_DIR}/poll-state.json"
 }
 
 format_event() {
@@ -57,17 +50,96 @@ format_event() {
     fi
 }
 
-while true; do
-    "$RINE_BIN" --json stream --persistent --monitor 2>/dev/null | while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        echo "$line" | grep -q '"event":"message"' 2>/dev/null || continue
+# compute_backoff <attempt>
+# Echoes the pre-jitter backoff delay in seconds (integer).
+# Uses RINE_MONITOR_BACKOFF_BASE and RINE_MONITOR_BACKOFF_MAX.
+compute_backoff() {
+    local attempt="${1:-1}"
+    local base="${RINE_MONITOR_BACKOFF_BASE:-5}"
+    local max="${RINE_MONITOR_BACKOFF_MAX:-300}"
 
-        bump_count
+    # attempt 0 (healthy reset) or 1 (first failure) → base delay. Guarding
+    # attempt<=1 is essential: 1 << (0-1) is a negative left-shift, which bash
+    # evaluates to a huge/negative value (shift count masked to 63 → 1<<63 →
+    # INT64_MIN), tripping the delay<=0 guard below and wrongly returning MAX.
+    # That would stall reconnect for 5 min after every clean disconnect.
+    if (( attempt <= 1 )); then
+        echo "$base"
+        return
+    fi
 
-        [[ -f "$PAUSE_FILE" ]] && continue
+    # delay = base * 2^(attempt-1), capped at max
+    local delay=$(( base * (1 << (attempt - 1)) ))
+    if (( delay > max || delay <= 0 )); then
+        delay=$max
+    fi
+    echo "$delay"
+}
 
-        format_event "$line"
-    done || true
+_rine_monitor_main() {
+    local attempt=0
+    local max_restarts="${RINE_MONITOR_MAX_RESTARTS:-0}"
+    local min_healthy="${RINE_MONITOR_MIN_HEALTHY:-30}"
 
-    sleep 5
-done
+    while true; do
+        local start_time="$SECONDS"
+
+        "$RINE_BIN" --json stream --persistent --monitor 2>/dev/null | while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "$line" | grep -q '"event":"message"' 2>/dev/null || continue
+
+            bump_count
+
+            [[ -f "$PAUSE_FILE" ]] && continue
+
+            format_event "$line"
+        done || true
+
+        local elapsed=$(( SECONDS - start_time ))
+
+        # Healthy run resets attempt counter; fast exit increments it.
+        if (( elapsed >= min_healthy )); then
+            attempt=0
+        else
+            (( attempt++ )) || true
+        fi
+
+        # Enforce max-restarts cap (0 = unlimited).
+        if (( max_restarts > 0 && attempt >= max_restarts )); then
+            break
+        fi
+
+        # Compute backoff delay and add 0–10% one-sided jitter via $RANDOM so
+        # many monitors that failed together don't reconnect in lockstep.
+        local base_delay
+        base_delay="$(compute_backoff "$attempt")"
+        # jitter ∈ [0, base_delay*0.0999] — integer arithmetic, never shortens base.
+        local jitter=$(( base_delay * (RANDOM % 1000) / 10000 ))
+        local sleep_secs=$(( base_delay + jitter ))
+        (( sleep_secs < 1 )) && sleep_secs=1
+
+        sleep "$sleep_secs"
+    done
+}
+
+# ── source-guard: sourcing with RINE_MONITOR_TEST_ONLY=1 loads functions only ──
+[[ "${RINE_MONITOR_TEST_ONLY:-}" == "1" ]] && return 0
+
+# ── side-effecting startup (runs only when not in test mode) ─────────────────
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "$PLUGIN_ROOT/scripts/lib/resolve-config-dir.sh"
+resolve_config_dir
+
+[[ -n "$RINE_HAS_CREDS" ]] || exit 0
+
+RINE_BIN="$(command -v rine 2>/dev/null || true)"
+[[ -n "$RINE_BIN" ]] || exit 0
+
+STATE_DIR="$RINE_DIR/state"
+PAUSE_FILE="$RINE_DIR/monitor-pause"
+mkdir -p "$STATE_DIR"
+
+trap 'kill 0 2>/dev/null; exit' TERM INT HUP
+
+_rine_monitor_main
