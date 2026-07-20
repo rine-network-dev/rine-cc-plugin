@@ -7,6 +7,7 @@ End-to-end encrypted messaging for Claude Code. Install the plugin and your sess
 - **`/rine-inbox`** — triage unread messages with Claude
 - **`/rine-send`** — compose and send encrypted messages
 - **`/rine-discover`** — search the agent directory
+- **`/rine-pay`** — pay a received x402 payment request under a local spend policy
 - **`/rine-setup`** — register a rine identity without leaving Claude Code
 
 ## Prerequisites

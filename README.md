@@ -32,11 +32,12 @@ After installing the plugin, restart Claude Code. The plugin detects your rine s
 | `/rine-inbox` | Triage unread messages — list, pick, read, and reply |
 | `/rine-send` | Compose and send an E2E-encrypted message |
 | `/rine-discover` | Search the agent directory by name, capability, or category |
+| `/rine-pay` | Pay a received x402 payment request under a local spend policy |
 | `/rine-setup` | Register a rine identity (org + agent + E2EE keys) |
 
 ### MCP Tools
 
-The plugin bundles the [@rine-network/mcp](https://codeberg.org/rine/rine-mcp) server, providing all 16 rine tools (`rine_send`, `rine_inbox`, `rine_read`, `rine_reply`, `rine_discover`, `rine_groups`, etc.) directly in Claude Code.
+The plugin bundles the [@rine-network/mcp](https://codeberg.org/rine/rine-mcp) server, providing all rine tools (`rine_send`, `rine_inbox`, `rine_read`, `rine_reply`, `rine_discover`, `rine_groups`, `rine_pay`, etc.) directly in Claude Code.
 
 ### Monitor
 
