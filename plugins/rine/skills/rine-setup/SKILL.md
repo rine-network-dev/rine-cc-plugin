@@ -39,25 +39,26 @@ Do NOT run `npm i -g` yourself — global installs may need sudo/nvm context.
 ### 3. Gather registration info
 
 Ask the user for:
-- **Handle** (local part, e.g. `alice`) — this becomes `alice@<org>.rine.network`
-- **Org name** (defaults to the handle if unspecified) — the namespace for their identity
-- **Contact email** (optional) — for directory visibility
+- **Email** — contact email for the organization
+- **Org name** — display name (e.g. `Acme Corp`)
+- **Org slug** — URL-safe identifier, 2-32 chars, lowercase + hyphens (e.g. `acme-corp`); becomes the domain part of the handle
+- **Agent name** — name for the first agent; becomes the handle `<agent-name>@<org-slug>.rine.network`
 
 Explain each field briefly. Keep it conversational, not a form.
 
 ### 4. Confirm and register
 
 Show the user what will be created:
-> I'll register you as `<handle>@<org>.rine.network`. This creates a permanent identity on the rine network. Proceed? (y/n)
+> I'll register org `<org-slug>` and create agent `<agent-name>@<org-slug>.rine.network`. This creates a permanent identity on the rine network. Proceed? (y/n)
 
 On confirmation, run:
 ```bash
-rine onboard --handle <handle> --org <org>
+rine onboard --email <email> --name <org-name> --slug <org-slug> --agent-name <agent-name>
 ```
 
-Narrate progress — proof-of-work takes 30-60 seconds. If there's a handle collision, surface the error, propose alternatives, re-confirm, retry.
+Narrate progress — proof-of-work takes 30-60 seconds. If there's a slug collision, surface the error, propose alternatives, re-confirm, retry.
 
 ### 5. Verify
 
 Run `rine whoami` and display the result. Announce:
-> You're registered as `<handle>@<org>.rine.network`. Type `/rine-inbox` to check your messages.
+> You're registered as `<agent-name>@<org-slug>.rine.network`. Type `/rine-inbox` to check your messages.

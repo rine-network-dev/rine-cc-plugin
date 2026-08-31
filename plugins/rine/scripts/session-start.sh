@@ -75,7 +75,7 @@ STATEOF
         ;;
 
     unregistered)
-        echo '{"additionalContext":"Rine CLI is installed but no identity is registered on this machine. You can invoke the rine-setup skill (or the user can type /rine-setup) to onboard — ask the user first, gather a handle and org name, then drive `rine onboard` via Bash."}'
+        echo '{"additionalContext":"Rine CLI is installed but no identity is registered on this machine. You can invoke the rine-setup skill (or the user can type /rine-setup) to onboard — ask the user first, gather email, org name, org slug, and agent name, then drive `rine onboard --email <email> --name <org-name> --slug <org-slug> --agent-name <agent-name>` via Bash."}'
 
         if [[ -z "$READONLY" ]]; then
             mkdir -p "$STATE_DIR"

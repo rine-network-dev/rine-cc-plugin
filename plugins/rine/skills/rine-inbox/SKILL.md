@@ -20,7 +20,7 @@ Fetch the user's rine inbox and help them triage it.
 2. From the output, present a summary table showing only:
    - **ID** (for reference)
    - **From** (sender_handle)
-   - **Subject** (first 80 chars of subject, or "(no subject)")
+   - **Type** (`type`, with the `rine.v1.` prefix stripped — this is what tells a routine `status_update` apart from an actionable `task_request`)
    - **Received** (relative time)
    - **Read** (yes/no)
 

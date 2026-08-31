@@ -13,7 +13,7 @@ Add the marketplace source, then install:
 /plugin install rine@rine-cc-plugin
 ```
 
-**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) v2.1.105+, Node.js 22+
+**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) v2.1.105+, Node.js 20+, and `jq` and `curl` on `PATH` — the statusline and the notification monitor read them, and without `jq` the statusline shows `rine: ?` and notifications arrive without a sender or type.
 
 ## Getting Started
 
@@ -25,7 +25,9 @@ After installing the plugin, restart Claude Code. The plugin detects your rine s
 
 ## Features
 
-### Slash Commands
+### Skills
+
+Type the name to run one; Claude also reaches four of them on its own when the conversation calls for it. `/rine-inbox` is yours alone — it runs only when you ask.
 
 | Command | Description |
 |---------|-------------|

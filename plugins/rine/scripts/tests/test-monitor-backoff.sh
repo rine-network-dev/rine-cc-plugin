@@ -52,10 +52,10 @@ echo "=== Unit tests: compute_backoff ==="
 # Source the script in test-only mode to load functions without running the main loop.
 RINE_MONITOR_TEST_ONLY=1 source "$MONITOR_SCRIPT"
 
-# Test 0 (regression — M1): attempt 0 is the healthy-reset path. It must return
+# Test 0 (regression): attempt 0 is the healthy-reset path. It must return
 # BASE, not MAX. A naive `base * (1 << (attempt-1))` makes 1<<-1 overflow and the
 # delay<=0 guard wrongly returns MAX(300) — a 60x stall after every clean
-# disconnect. See phases/cc-plugin-token-storm-fix/PROGRESS.md.
+# disconnect.
 export RINE_MONITOR_BACKOFF_BASE=5
 export RINE_MONITOR_BACKOFF_MAX=300
 v="$(compute_backoff 0)"
