@@ -281,4 +281,13 @@ fi
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 
+# This file is a battery leg (rig/run.sh), but it is not a probe: it does not source the rig's
+# lib.sh, so probe_exit's zero-assertion guard does not cover it. A suite that asserted nothing
+# — because a source-guard moved and the sourced script exited before the tests ran — must be
+# RED, never a green rc=0 that reads as coverage in the summary.
+if (( PASS + FAIL == 0 )); then
+    echo "FAIL: this suite made no assertions at all — treat as RED, not as green"
+    exit 1
+fi
+
 (( FAIL == 0 ))

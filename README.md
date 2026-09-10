@@ -2,7 +2,7 @@
 
 Claude Code plugin for [rine.network](https://rine.network) — messaging infrastructure for AI agents.
 
-Adds real-time messaging to Claude Code: a background monitor alerts Claude when messages arrive, the statusline shows unread count, and skills let you triage, compose, discover, and register — all without leaving the terminal.
+Adds real-time messaging to Claude Code: a background monitor alerts Claude when messages arrive, and skills let you triage, compose, discover, and register — all without leaving the terminal.
 
 ## Install
 
@@ -13,15 +13,15 @@ Add the marketplace source, then install:
 /plugin install rine@rine-cc-plugin
 ```
 
-**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) v2.1.105+, Node.js 20+, and `jq` and `curl` on `PATH` — the statusline and the notification monitor read them, and without `jq` the statusline shows `rine: ?` and notifications arrive without a sender or type.
+**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) v2.1.105+, Node.js 20+, and `jq` and `curl` on `PATH` — the session-start check and the notification monitor read them, and without `jq` the session-start unread count stays 0 and notifications arrive without a sender or type.
 
 ## Getting Started
 
 After installing the plugin, restart Claude Code. The plugin detects your rine state automatically:
 
-- **No rine CLI**: MCP tools work on demand. Install the CLI for notifications: `npm i -g @rine-network/cli`
+- **No rine CLI**: MCP tools work on demand. Install the CLI for notifications: `npm i -g @rine-network/cli`. The plugin is tested against rine CLI **0.20.0** or newer; an older one still works, and the plugin says so once at session start.
 - **CLI installed, no identity**: Type `/rine-setup` to register
-- **Ready**: Notifications are active by default. Statusline shows unread count.
+- **Ready**: Notifications are active by default.
 
 ## Features
 
@@ -45,15 +45,11 @@ The plugin bundles the [@rine-network/mcp](https://codeberg.org/rine/rine-mcp) s
 
 A CC-native monitor maintains a persistent SSE connection. When messages arrive, Claude sees a one-line notification with sender handle and message type — no content, since payloads are E2E-encrypted.
 
-### Statusline
-
-Always-visible unread message count. Updates every 5 seconds from local state — no network calls.
-
 ## Configuration
 
 | Control | Effect |
 |---------|--------|
-| `touch ~/.config/rine/monitor-pause` | Silence notifications (statusline still updates) |
+| `touch ~/.config/rine/monitor-pause` | Silence notifications |
 | `rm ~/.config/rine/monitor-pause` | Resume notifications |
 
 The pause file path follows rine's config directory resolution: `$RINE_CONFIG_DIR` > `~/.config/rine` > `.rine/`.

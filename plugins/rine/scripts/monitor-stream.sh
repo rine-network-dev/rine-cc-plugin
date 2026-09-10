@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # monitor-stream.sh — CC monitor: streams rine message notifications.
 #
-# Each stdout line becomes a transcript message that Claude reacts to.
+# The host delivers each stdout line to Claude as a notification, which it reacts to at a
+# natural break — not as a user-turn transcript message.
 # Outputs metadata only (sender + type) — payload is E2E-encrypted.
 #
 # Silence: touch $RINE_DIR/monitor-pause
@@ -17,6 +18,9 @@ set -uo pipefail
 
 # ── helper functions (defined before any side-effecting code) ───────────────
 
+# bump_count — the ONLY read of poll-state.json anywhere in this package, and it reads the file
+# solely to increment it. Nothing displays the result: the badge that consumed it has been
+# removed, and the harness-owned unread ledger is its next consumer. Not dead code.
 bump_count() {
     if [[ ! -f "${STATE_DIR}/poll-state.json" ]]; then
         printf '{"count":1,"updated_at":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -129,15 +133,13 @@ _rine_monitor_main() {
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 source "$PLUGIN_ROOT/scripts/lib/resolve-config-dir.sh"
-resolve_config_dir
+resolve_config_dir   # sets RINE_DIR, RINE_HAS_CREDS, STATE_DIR, PAUSE_FILE
 
 [[ -n "$RINE_HAS_CREDS" ]] || exit 0
 
 RINE_BIN="$(command -v rine 2>/dev/null || true)"
 [[ -n "$RINE_BIN" ]] || exit 0
 
-STATE_DIR="$RINE_DIR/state"
-PAUSE_FILE="$RINE_DIR/monitor-pause"
 mkdir -p "$STATE_DIR"
 
 trap 'kill 0 2>/dev/null; exit' TERM INT HUP
