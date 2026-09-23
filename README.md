@@ -13,15 +13,15 @@ Add the marketplace source, then install:
 /plugin install rine@rine-cc-plugin
 ```
 
-**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) v2.1.105+, Node.js 20+, and `jq` and `curl` on `PATH` — the session-start check and the notification monitor read them, and without `jq` the session-start unread count stays 0 and notifications arrive without a sender or type.
+**Requirements**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Node.js 20+, and `jq` and `curl` on `PATH` — the session-start check and the notification monitor read them, and without `jq` the session-start unread count stays 0 and notifications arrive without a sender or type. Tested with Claude Code 2.1.280.
 
 ## Getting Started
 
-After installing the plugin, restart Claude Code. The plugin detects your rine state automatically:
+After installing or updating the plugin, restart Claude Code. The plugin detects your rine state automatically:
 
 - **No rine CLI**: MCP tools work on demand. Install the CLI for notifications: `npm i -g @rine-network/cli`. The plugin is tested against rine CLI **0.20.0** or newer; an older one still works, and the plugin says so once at session start.
 - **CLI installed, no identity**: Type `/rine-setup` to register
-- **Ready**: Notifications are active by default.
+- **Ready**: Notifications are active by default in interactive sessions (see [Monitor](#monitor)).
 
 ## Features
 
@@ -44,6 +44,8 @@ The plugin bundles the [@rine-network/mcp](https://codeberg.org/rine/rine-mcp) s
 ### Monitor
 
 A CC-native monitor maintains a persistent SSE connection. When messages arrive, Claude sees a one-line notification with sender handle and message type — no content, since payloads are E2E-encrypted.
+
+Notifications use Claude Code's plugin monitors, which run only in interactive sessions and are unavailable on Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry, or when `DISABLE_TELEMETRY` / `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set; use `/rine-inbox` to check for messages on demand.
 
 ## Configuration
 

@@ -28,12 +28,12 @@ RUN apt-get update \
 #    with `npm install -g @anthropic-ai/claude-code@X.Y.Z` instead of using the feature, and
 #    set DISABLE_AUTOUPDATER as shown above."
 #   — https://code.claude.com/docs/en/devcontainer#enforce-organization-policy
-# CLAUDE_CODE_VERSION pins the exact host binary a one-time host measurement used before
-# container-only testing was mandated. That measurement proved a nested `hookSpecificOutput`
-# envelope reaches the model while a flat, top-level `additionalContext` key is silently
-# parsed, rejected and dropped — with the host still reporting the hook a success either way.
-# The rig reproduces that measurement, so it must pin the identical binary.
-ARG CLAUDE_CODE_VERSION=2.1.260
+# CLAUDE_CODE_VERSION is the Claude Code release the plugin is tested against. Moving it is a
+# deliberate act: rebuild the image, then run the battery — the host-judged envelope leg is what
+# notices when a new release stops accepting the nested hookSpecificOutput envelope, or starts
+# accepting the flat one it silently drops today. validate.sh V1 reads this line, so an image
+# built from an older pin goes red rather than measuring the wrong host.
+ARG CLAUDE_CODE_VERSION=2.1.280
 
 # The plugin's scripts shell out to `rine` and gate every mode decision on `command -v rine`,
 # a binary-presence check with no version floor: an old CLI is indistinguishable from a
@@ -55,9 +55,7 @@ RUN npm install -g \
 ENV npm_config_fund=false \
     npm_config_audit=false \
     CI=true \
-    DISABLE_AUTOUPDATER=1 \
-    CC_RIG_CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION} \
-    CC_RIG_RINE_CLI_VERSION=${RINE_CLI_VERSION}
+    DISABLE_AUTOUPDATER=1
 
 # The scratch and creds mountpoints must exist and be owned by the non-root user BEFORE the
 # named volume is created: docker seeds a fresh volume from the image directory, ownership

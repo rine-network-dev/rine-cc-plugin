@@ -1,7 +1,7 @@
 [
   {
     "name": "rine-stream",
-    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-stream.sh",
+    "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/monitor-stream.sh",
     "description": "Rine message notifications (sender + type)",
     "when": "always"
   }

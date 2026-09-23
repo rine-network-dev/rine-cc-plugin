@@ -32,6 +32,8 @@
 #                  again. Measured exiting the hook 127 under a starved PATH, which breaks the
 #                  one contract the hook calls unconditional. This mutant is what stops a
 #                  later "tidy-up" from putting the shell-out back.
+# M10 e16-ab    · --hostjudge vs an unquoted ${CLAUDE_PLUGIN_ROOT} (a spaced path) → RED
+# M11 validate  · the tree's pin moves: image and both READMEs no longer match → must go RED
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -167,6 +169,22 @@ expect_rc "M9 hookenv vs a tr pipeline back on the emit path" 1 $?
 grep -q 'hook exited 127' "$MUT/m9.log" \
     && pass "M9 shows the exact failure: a starved PATH takes the hook to exit 127, not to exit 0" \
     || fail "M9 went red without the exit-127 signature — the starvation leg is not what caught it"
+
+# --- M10 ------------------------------------------------------------------------------
+M10="$(mutant m10)"
+sed -i 's/\\"//g' "$M10/plugins/rine/.claude-plugin/plugin.json"
+CC_PLUGIN_SRC="$M10" "$PROBES/e16-ab.sh" --hostjudge >"$MUT/m10.log" 2>&1
+expect_rc "M10 e16-ab --hostjudge vs an unquoted plugin-root placeholder" 1 $?
+grep -q 'SessionStart) error.*not found' "$MUT/m10.log" && pass "M10 shows the host's shell split the spaced path" \
+    || fail "M10 went red without the split-path signature — the quoting is not what it caught"
+
+# --- M11 ------------------------------------------------------------------------------
+M11="$(mutant m11)"
+sed -i 's/^ARG CLAUDE_CODE_VERSION=.*/ARG CLAUDE_CODE_VERSION=0.0.0/' "$M11/rig/Dockerfile"
+CC_PLUGIN_SRC="$M11" "$PROBES/validate.sh" >"$MUT/m11.log" 2>&1
+expect_rc "M11 validate vs an image that is not the tree's pin" 1 $?
+grep -q "not built at the tree's pin" "$MUT/m11.log" && [ "$(grep -c 'does not name the tested Claude Code version' "$MUT/m11.log")" -eq 2 ] && pass "M11 names the unbuilt pin and both READMEs' stale tested-version claim" \
+    || fail "M11 lacks the pin-mismatch signature or one of the two README rows — the pin binding is unproven"
 
 # --- M4 -------------------------------------------------------------------------------
 if have_cc_credential; then

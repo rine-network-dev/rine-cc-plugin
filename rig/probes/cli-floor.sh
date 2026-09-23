@@ -134,14 +134,6 @@ assert_silent "no-rine"
 # Both READMEs state the floor to a reader who will never run this rig, and nothing else binds
 # them to it: raising RINE_CLI_TESTED_FLOOR without touching them ships a documented floor that
 # is a release behind, which is indistinguishable from a correct one until a user hits it.
-for README in "$PLUGIN_SRC/README.md" "$PLUGIN_DIR/README.md"; do
-    if [ ! -f "$README" ]; then
-        fail "README missing: $README"
-    elif grep -qF "$FLOOR" "$README"; then
-        pass "$(basename "$(dirname "$README")")/README.md names the tested floor ${FLOOR}"
-    else
-        fail "${README#"$PLUGIN_SRC"/} does not name RINE_CLI_TESTED_FLOOR (${FLOOR}) — the shipped prose is stale"
-    fi
-done
+assert_readmes_name cli-floor "**${FLOOR}** or newer" "the tested rine CLI floor RINE_CLI_TESTED_FLOOR (${FLOOR})"
 
 probe_exit

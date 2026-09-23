@@ -170,7 +170,7 @@ if [ "$MODE" != "--authless" ]; then
             local label="$1" prompt="$2"
             local log="$WORK/${label}.log"
             (cd "$WORK" && claude -p "$prompt" --model sonnet --plugin-dir "$WORK/plugin" \
-                --disallowedTools Bash --debug --debug-file "$log" --output-format json 2>"$log.err" \
+                --disallowedTools Bash --debug --debug-file "$log" --output-format json 2>"$log.err" </dev/null \
               | python3 -c 'import json,sys; print(json.load(sys.stdin).get("result",""))' 2>/dev/null)
         }
         UNKNOWN="$(run_cmd unknown '/rine-nope-xyz')"

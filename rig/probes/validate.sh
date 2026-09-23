@@ -2,7 +2,8 @@
 # validate.sh — AUTH-LESS probe. Runs with no Claude credential of any kind.
 #
 # Asserts:
-#   V1  the pinned Claude Code binary is the one a one-time host measurement used (2.1.260)
+#   V1  the image's Claude Code binary is the version rig/Dockerfile pins (the tested host),
+#       and both READMEs name that version as the one the plugin is tested with
 #   V2  the pinned rine CLI is present (the plugin gates every mode on `command -v rine`)
 #   V3  `claude plugin validate --strict` is green on the plugin dir
 #   V4  `claude plugin validate --strict` is green on the marketplace root
@@ -20,8 +21,20 @@ PROBE_NAME="validate"
 # shellcheck source=lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-EXPECT_CC="${CC_RIG_CLAUDE_CODE_VERSION:-2.1.260}"
-EXPECT_CLI="${CC_RIG_RINE_CLI_VERSION:-0.20.0}"
+# The versions this image must carry are read from the tree's own rig/Dockerfile, never from
+# the image: a value the image baked in at build time agrees with that image however stale it
+# is. The mounted plugin tree always carries rig/Dockerfile, and reading it through PLUGIN_SRC
+# lets a mutant tree move the pin.
+RIG_DOCKERFILE="$PLUGIN_SRC/rig/Dockerfile"
+dockerfile_pin() { sed -n "s/^ARG $1=//p" "$RIG_DOCKERFILE"; }
+EXPECT_CC="$(dockerfile_pin CLAUDE_CODE_VERSION)"
+EXPECT_CLI="$(dockerfile_pin RINE_CLI_VERSION)"
+if [ -z "$EXPECT_CC" ] || [ -z "$EXPECT_CLI" ]; then
+    fail "V1/V2 could not read the pin from rig/Dockerfile — every version check loses its subject"
+fi
+# A mismatch has two causes, and a rebuild fixes only the first: an image built before the pin
+# moved, or compose.cc.yml build args that disagree with rig/Dockerfile (they win at build time).
+STALE_IMAGE="the image was not built at the tree's pin: rebuild it (docker compose -f compose.cc.yml build); if it still differs, compose.cc.yml's build args disagree with rig/Dockerfile or a lane overrode them on purpose"
 
 # --- V1 -------------------------------------------------------------------------------
 CC_VER_RAW="$(claude --version 2>&1)"; CC_VER_RC=$?
@@ -31,8 +44,14 @@ if [ "$CC_VER_RC" -ne 0 ]; then
 elif [ "${CC_VER_RAW%% *}" = "$EXPECT_CC" ]; then
     pass "V1 Claude Code pinned at ${EXPECT_CC}"
 else
-    fail "V1 Claude Code is '${CC_VER_RAW%% *}', expected ${EXPECT_CC} (the version a one-time host measurement used)"
+    fail "V1 Claude Code in this image is '${CC_VER_RAW%% *}', rig/Dockerfile pins ${EXPECT_CC} — ${STALE_IMAGE}"
 fi
+
+# Both READMEs tell a reader which Claude Code release the plugin is tested with, and nothing
+# else binds that sentence to the pin: moving the pin without them ships a claim a release
+# behind, which reads exactly like a current one. The whole sentence is matched, not the bare
+# version, so neither another mention of the version nor a longer version number satisfies it.
+assert_readmes_name V1 "Tested with Claude Code ${EXPECT_CC}." "the tested Claude Code version ${EXPECT_CC}"
 
 # --- V2 -------------------------------------------------------------------------------
 if ! command -v rine >/dev/null 2>&1; then
@@ -43,7 +62,7 @@ else
     if [ "$CLI_VER" = "$EXPECT_CLI" ]; then
         pass "V2 rine CLI pinned at ${EXPECT_CLI}"
     else
-        fail "V2 rine CLI is '${CLI_VER}', expected ${EXPECT_CLI}"
+        fail "V2 rine CLI is '${CLI_VER}', expected ${EXPECT_CLI} — ${STALE_IMAGE}"
     fi
 fi
 

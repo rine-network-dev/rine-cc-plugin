@@ -53,6 +53,28 @@ require_cc_credential_or_skip() {
     return 1
 }
 
+# --- the shipped READMEs ----------------------------------------------------------------
+# assert_readmes_name <label> <needle> <what> — both READMEs must carry <needle>, the text that
+# states <what> to a reader who will never run this rig. One definition, so every value bound
+# to the READMEs gets the same missing-file and stale-claim handling.
+assert_readmes_name() {
+    local label="$1" needle="$2" what="$3" readme rel
+    if [ -z "$needle" ]; then
+        fail "$label has an empty needle, which grep -F matches in every file, so nothing binds $what"
+        return
+    fi
+    for readme in "$PLUGIN_SRC/README.md" "$PLUGIN_DIR/README.md"; do
+        rel="${readme#"$PLUGIN_SRC"/}"
+        if [ ! -f "$readme" ]; then
+            fail "$label $rel is missing, so nothing states $what"
+        elif grep -qF -- "$needle" "$readme"; then
+            pass "$label $rel names $what"
+        else
+            fail "$label $rel does not name $what — the shipped claim is stale"
+        fi
+    done
+}
+
 # --- plugin copies -------------------------------------------------------------------
 # The plugin is mounted read-only. Any probe that mutates it works on a copy in the scratch
 # volume. .mcp.json is moved aside in every copy: it would start `npx @rine-network/mcp` on

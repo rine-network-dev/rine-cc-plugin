@@ -1,6 +1,6 @@
 {
   "name": "rine",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Rine messaging for Claude Code — real-time notifications, inbox triage, and agent-driven setup.",
   "author": {
     "name": "rine.network",
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/session-start.sh",
             "timeout": 15
           }
         ]

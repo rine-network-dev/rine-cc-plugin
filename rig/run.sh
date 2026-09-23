@@ -96,6 +96,7 @@ run_leg() {
 
 run_leg "auth-less · validate"  "$PROBES/validate.sh"
 run_leg "auth-less · e16-ab"    "$PROBES/e16-ab.sh" --authless
+run_leg "auth-less · e16-hostjudge" "$PROBES/e16-ab.sh" --hostjudge
 run_leg "auth-less · e15-slash" "$PROBES/e15-slash.sh" --authless
 run_leg "auth-less · cli-floor" "$PROBES/cli-floor.sh"
 run_leg "auth-less · hookenv"   "$PROBES/hookenv.sh"
