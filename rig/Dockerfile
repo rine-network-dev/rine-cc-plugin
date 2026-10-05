@@ -8,17 +8,18 @@
 # CI=true, a long-lived default CMD so `run --rm cc <cmd>` one-shots work.
 FROM node:24-bookworm-slim
 
-# curl + jq: the plugin's own scripts shell out to them (session-start.sh's ready branch and
-#   monitor-stream.sh). Both are still required — only the statusline that also used jq is gone.
-# python3 + python3-yaml: the auth-less probes parse SKILL.md frontmatter and the hook's
-#   JSON envelope, and stand up a local poll endpoint so the `ready, count>0` hook branch
-#   is reachable without a network or a real identity.
+# curl and jq are gone: the plugin is a hooks module and runs no shell script, and no probe
+#   greps as using either (verified by grep over rig/ when they were dropped).
+# python3 + python3-yaml: the auth-less probes parse SKILL.md frontmatter, plugin.json and the
+#   debug log, and the e2e reads the session JSONL with it.
+# tmux + procps: the interactive e2e drives a real `claude` REPL through a tmux pane
+#   (capture-pane, send-keys) and counts child processes with ps/pgrep.
 # git + ca-certificates: npm/git deps and TLS.
 # ripgrep: Claude Code ships its own, but a system rg is the documented fallback
 #   (https://code.claude.com/docs/en/setup#additional-dependencies).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl jq git python3 python3-yaml ripgrep \
+      ca-certificates git python3 python3-yaml ripgrep tmux procps \
  && rm -rf /var/lib/apt/lists/*
 
 # Pinned, never floating. The docs are explicit that the npm package is the way to pin a
@@ -29,11 +30,11 @@ RUN apt-get update \
 #    set DISABLE_AUTOUPDATER as shown above."
 #   — https://code.claude.com/docs/en/devcontainer#enforce-organization-policy
 # CLAUDE_CODE_VERSION is the Claude Code release the plugin is tested against. Moving it is a
-# deliberate act: rebuild the image, then run the battery — the host-judged envelope leg is what
-# notices when a new release stops accepting the nested hookSpecificOutput envelope, or starts
-# accepting the flat one it silently drops today. validate.sh V1 reads this line, so an image
-# built from an older pin goes red rather than measuring the wrong host.
-ARG CLAUDE_CODE_VERSION=2.1.280
+# deliberate act: rebuild the image, then run the battery — the mod's module API is early access
+# and moves between releases, so mod-test and mod-headless are what notice a release that stops
+# accepting a shape the plugin uses. validate.sh V1 reads this line, so an image built from an
+# older pin goes red rather than measuring the wrong host.
+ARG CLAUDE_CODE_VERSION=2.1.287
 
 # The plugin's scripts shell out to `rine` and gate every mode decision on `command -v rine`,
 # a binary-presence check with no version floor: an old CLI is indistinguishable from a
@@ -47,10 +48,19 @@ ARG CLAUDE_CODE_VERSION=2.1.280
 #   - a lane that needs an unreleased verb overrides this build arg, deliberately and visibly.
 ARG RINE_CLI_VERSION=0.20.0
 
+# The last Claude Code release that skips the hooks module instead of running it, for
+# old-cc-load.sh: a side-by-side install under /opt/claude-old, so the leg needs no second image
+# and runs inside run.sh on whatever tag ci.sh uses. The 2.1.280 validator rejects shapes
+# 2.1.287 accepts, so that leg never runs `plugin validate`.
+ARG OLD_CLAUDE_CODE_VERSION=2.1.280
+
 RUN npm install -g \
       "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
       "@rine-network/cli@${RINE_CLI_VERSION}" \
+ && npm install --prefix /opt/claude-old "@anthropic-ai/claude-code@${OLD_CLAUDE_CODE_VERSION}" \
  && npm cache clean --force
+
+ENV CC_OLD_CLAUDE=/opt/claude-old/node_modules/.bin/claude
 
 ENV npm_config_fund=false \
     npm_config_audit=false \
@@ -61,7 +71,7 @@ ENV npm_config_fund=false \
 # named volume is created: docker seeds a fresh volume from the image directory, ownership
 # included, so a mountpoint that only exists at `docker run` time comes up root-owned and every
 # probe that writes to it fails — while a probe that does not check its own write reports green.
-RUN mkdir -p /work/scratch /work/creds /work/rine-cc-plugin /work/rig \
+RUN mkdir -p /work/scratch /work/creds /work/creds-b /work/rine-cc-plugin /work/rig \
  && chown -R node:node /work
 
 WORKDIR /work/scratch

@@ -1,6 +1,6 @@
 {
   "name": "rine",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Rine messaging for Claude Code — real-time notifications, inbox triage, and agent-driven setup.",
   "author": {
     "name": "rine.network",
@@ -9,19 +9,12 @@
   "homepage": "https://rine.network",
   "repository": "https://codeberg.org/rine/rine-cc-plugin",
   "license": "EUPL-1.2",
-  "keywords": ["messaging", "e2ee", "agents", "notifications", "mcp"],
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/session-start.sh",
-            "timeout": 15
-          }
-        ]
-      }
-    ]
-  }
+  "types": "./types/index.d.ts",
+  "keywords": [
+    "messaging",
+    "e2ee",
+    "agents",
+    "notifications",
+    "mcp"
+  ]
 }

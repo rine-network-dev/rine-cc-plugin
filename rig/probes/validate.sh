@@ -9,17 +9,20 @@
 #   V4  `claude plugin validate --strict` is green on the marketplace root
 #   V5  every shipped JSON manifest parses
 #   V6  every SKILL.md has parseable YAML frontmatter with name + description
-#   V7  monitors.json entries carry the required name/command/description fields
+#   V7  the mod layout: hooks/hooks.json lists the register.tsx module, plugin.json points at
+#       its types file and carries no hooks key, and the old monitors/ and scripts/ are gone
+#   V8  `plugin validate --json` lists every hook event the mod registers
 #
-# Records, without asserting (a measured fact about the host tool): `plugin validate`
-# reports `"contents": []` — it is a MANIFEST linter. It reads no skill and no monitors.json,
-# and it does not fail on a SKILL.md whose YAML does not parse. V6/V7 exist
-# precisely because V3/V4 do not cover them. Never describe V3/V4 as covering plugin contents.
+# Records, without asserting (a measured fact about the host tool): `plugin validate` is a
+# MANIFEST linter — it reads no skill and no hooks.json, and does not fail on a SKILL.md whose
+# YAML does not parse. V6/V7 exist precisely because V3/V4 do not cover them. Never describe
+# V3/V4 as covering plugin contents.
 
 set -uo pipefail
 PROBE_NAME="validate"
 # shellcheck source=lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+PROBES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The versions this image must carry are read from the tree's own rig/Dockerfile, never from
 # the image: a value the image baked in at build time agrees with that image however stale it
@@ -47,11 +50,11 @@ else
     fail "V1 Claude Code in this image is '${CC_VER_RAW%% *}', rig/Dockerfile pins ${EXPECT_CC} — ${STALE_IMAGE}"
 fi
 
-# Both READMEs tell a reader which Claude Code release the plugin is tested with, and nothing
-# else binds that sentence to the pin: moving the pin without them ships a claim a release
-# behind, which reads exactly like a current one. The whole sentence is matched, not the bare
-# version, so neither another mention of the version nor a longer version number satisfies it.
-assert_readmes_name V1 "Tested with Claude Code ${EXPECT_CC}." "the tested Claude Code version ${EXPECT_CC}"
+# Both READMEs tell a reader which Claude Code release the plugin needs, and nothing else binds
+# that sentence to the pin: moving the pin without them ships a claim a release behind, which
+# reads exactly like a current one. The floor phrase is matched, not the bare version, so a
+# longer version number does not satisfy it.
+assert_readmes_name V1 "${EXPECT_CC} or newer" "the Claude Code version floor ${EXPECT_CC}"
 
 # --- V2 -------------------------------------------------------------------------------
 if ! command -v rine >/dev/null 2>&1; then
@@ -86,98 +89,39 @@ except Exception:
 print(json.dumps(d.get("contents", "<absent>")))' 2>/dev/null || echo '<no --json>')"
 info "plugin validate --json .contents → ${CONTENTS}  (manifest linter only; V6/V7 are the real content checks)"
 
+# One reader for every python heredoc that prints PASS/FAIL rows, so the two loops below
+# cannot drift apart.
+emit_rows() {
+    local kind msg
+    while IFS=$'\t' read -r kind msg; do
+        case "$kind" in
+            PASS) pass "$msg" ;;
+            FAIL) fail "$msg" ;;
+            *)    [ -n "${kind:-}" ] && info "python: ${kind}${msg:+ $msg}" ;;
+        esac
+    done < "$1"
+}
+
+# --- V8 ---------------------------------------------------------------------------------
+# `plugin validate --json` reports the hook events the mod registers in contents[].notes[].
+# The mod is the only thing that can register them now, so an event missing from that list is
+# a mod that silently stopped answering it.
+VALIDATE_JSON="$(claude plugin validate --json "$PLUGIN_DIR" 2>/dev/null)"; VJ_RC=$?
+if [ "$VJ_RC" -ne 0 ]; then
+    fail "V8 plugin validate --json $PLUGIN_DIR → exit $VJ_RC"
+else
+    printf '%s' "$VALIDATE_JSON" | "$PROBES_DIR/validate-static.py" "$PLUGIN_SRC" events > "$SCRATCH/.validate-v8.out" 2>&1
+    [ -s "$SCRATCH/.validate-v8.out" ] || fail "V8 the hook-event checker did not run"
+    emit_rows "$SCRATCH/.validate-v8.out"
+fi
+
 # --- V5 / V6 / V7 -----------------------------------------------------------------------
-python3 - "$PLUGIN_SRC" <<'PYEOF' > "$SCRATCH/.validate-py.out" 2>&1
-import json, os, sys
-import yaml
-
-src = sys.argv[1]
-plugin = os.path.join(src, "plugins", "rine")
-lines = []
-
-def emit(kind, msg):
-    lines.append(f"{kind}\t{msg}")
-
-# V5 — every shipped JSON manifest parses.
-manifests = [
-    os.path.join(src, ".claude-plugin", "marketplace.json"),
-    os.path.join(plugin, ".claude-plugin", "plugin.json"),
-    os.path.join(plugin, ".mcp.json"),
-    os.path.join(plugin, "monitors", "monitors.json"),
-]
-docs = {}
-for path in manifests:
-    rel = os.path.relpath(path, src)
-    if not os.path.exists(path):
-        emit("FAIL", f"V5 missing manifest {rel}")
-        continue
-    try:
-        with open(path) as fh:
-            docs[rel] = json.load(fh)
-        emit("PASS", f"V5 {rel} parses as JSON")
-    except Exception as exc:
-        emit("FAIL", f"V5 {rel} does not parse: {exc}")
-
-# V6 — every SKILL.md has parseable YAML frontmatter with name + description.
-skills_dir = os.path.join(plugin, "skills")
-names = sorted(os.listdir(skills_dir)) if os.path.isdir(skills_dir) else []
-if not names:
-    emit("FAIL", "V6 no skills directory")
-for name in names:
-    md = os.path.join(skills_dir, name, "SKILL.md")
-    rel = os.path.relpath(md, src)
-    if not os.path.isfile(md):
-        emit("FAIL", f"V6 {name}/ has no SKILL.md")
-        continue
-    text = open(md, encoding="utf-8").read()
-    if not text.startswith("---"):
-        emit("FAIL", f"V6 {rel} has no YAML frontmatter fence")
-        continue
-    body = text.split("---", 2)
-    if len(body) < 3:
-        emit("FAIL", f"V6 {rel} frontmatter fence is unterminated")
-        continue
-    try:
-        fm = yaml.safe_load(body[1])
-    except Exception as exc:
-        emit("FAIL", f"V6 {rel} frontmatter is not valid YAML: {exc}")
-        continue
-    if not isinstance(fm, dict):
-        emit("FAIL", f"V6 {rel} frontmatter is not a mapping")
-        continue
-    missing = [k for k in ("name", "description") if not fm.get(k)]
-    if missing:
-        emit("FAIL", f"V6 {rel} frontmatter missing {missing}")
-    else:
-        emit("PASS", f"V6 {rel} frontmatter ok (name={fm['name']})")
-
-# V7 — monitors.json shape. Required fields per the plugins reference.
-mon = docs.get(os.path.join("plugins", "rine", "monitors", "monitors.json"))
-if mon is None:
-    emit("FAIL", "V7 monitors.json unavailable")
-elif not isinstance(mon, list) or not mon:
-    emit("FAIL", "V7 monitors.json is not a non-empty array")
-else:
-    for entry in mon:
-        missing = [k for k in ("name", "command", "description") if not entry.get(k)]
-        if missing:
-            emit("FAIL", f"V7 monitor {entry.get('name', '<unnamed>')} missing {missing}")
-        else:
-            emit("PASS", f"V7 monitor {entry['name']} has name/command/description")
-
-print("\n".join(lines))
-PYEOF
+"$PROBES_DIR/validate-static.py" "$PLUGIN_SRC" > "$SCRATCH/.validate-py.out" 2>&1
 PY_RC=$?
 if [ "$PY_RC" -ne 0 ] || [ ! -s "$SCRATCH/.validate-py.out" ]; then
     fail "V5/V6/V7 the manifest+skill checker did not run (exit ${PY_RC}) — no content coverage this run"
 fi
 
-while IFS=$'\t' read -r kind msg; do
-    case "$kind" in
-        PASS) pass "$msg" ;;
-        FAIL) fail "$msg" ;;
-        *)    [ -n "${kind:-}" ] && info "python: ${kind}${msg:+ $msg}" ;;
-    esac
-done < "$SCRATCH/.validate-py.out"
+emit_rows "$SCRATCH/.validate-py.out"
 
 probe_exit

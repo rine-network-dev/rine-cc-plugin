@@ -7,33 +7,20 @@
 # read-only and untouched. A gate authored alongside the code it guards is worth nothing until
 # it has been shown to fail on a defect — a green probe over a mutant is a hole, not coverage.
 #
+# control · an unmutated copy is GREEN under mod-test — without it every RED below is meaningless
 # M1  e15-slash  · a README advertises a command no skill answers        → must go RED
-# M2  e16-ab     · plugin.json registers a different hook event than the → must go RED
-#                  envelope names (proves hookEventName is DERIVED)
 # M3  validate   · a SKILL.md whose YAML frontmatter does not parse      → must go RED
 #                  …while `claude plugin validate --strict` stays GREEN on the same mutant —
 #                  a measured fact about the host tool: it lints only the manifest, reads no
 #                  skill file, and would not have caught this. Recorded as INFO, asserted as
 #                  a fact.
 # M4  run.sh     · --require-model with no credential                    → must exit 2
-# M5  e16-ab     · emit_context flattened back to the pre-fix top-level  → must go RED
-#                  envelope: the defect that actually shipped. A flat, top-level
-#                  `additionalContext` key is silently parsed, rejected and dropped by the
-#                  host, which still reports the hook a success — so it passed
-#                  `plugin validate --strict` and was invisible in production.
 # M6  e15-slash  · a README promises a statusline the plugin no longer   → must go RED
 #                  ships (deleted: a plugin settings.json cannot install a working
 #                  statusLine on this host)
-# M7  cli-floor  · rine_cli_below_floor never reports "below"            → must go RED
-#                  (the silent half of a version check is the half that rots)
-# M8  hookenv    · emit_context stops escaping the double quote          → must go RED
-#                  on the hostile config path, which is where it matters
-# M9  hookenv    · emit_context strips control chars with a `tr` pipeline → must go RED
-#                  again. Measured exiting the hook 127 under a starved PATH, which breaks the
-#                  one contract the hook calls unconditional. This mutant is what stops a
-#                  later "tidy-up" from putting the shell-out back.
-# M10 e16-ab    · --hostjudge vs an unquoted ${CLAUDE_PLUGIN_ROOT} (a spaced path) → RED
 # M11 validate  · the tree's pin moves: image and both READMEs no longer match → must go RED
+# M12-M40 mod-test · one defect per row of the TABLE further down, each
+#                  applied by mutate.py → must go RED
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,6 +48,20 @@ expect_rc() {
     fi
 }
 
+# --- CONTROL --------------------------------------------------------------------------
+# A mutant that is RED proves nothing unless the unmutated copy is GREEN: a plugin that
+# cannot even start `claude plugin test` is red for every id below, for no reason at all.
+CONTROL="$(mutant control)"
+CC_PLUGIN_SRC="$CONTROL" "$PROBES/mod-test.sh" >"$MUT/control.log" 2>&1
+control_rc=$?
+if [ "$control_rc" -eq 0 ]; then
+    pass "control: an unmutated copy of the plugin is GREEN under mod-test"
+else
+    fail "control: an unmutated copy of the plugin is RED under mod-test — every RED below would prove nothing; skipping the mutants"
+    probe_exit
+    exit $?
+fi
+
 # --- M1 -------------------------------------------------------------------------------
 M1="$(mutant m1)"
 printf '\nRun `/rine-ghost` to do the thing.\n' >> "$M1/plugins/rine/README.md"
@@ -68,21 +69,6 @@ CC_PLUGIN_SRC="$M1" "$PROBES/e15-slash.sh" --authless >"$MUT/m1.log" 2>&1
 expect_rc "M1 e15-slash vs an unanswerable /rine-ghost" 1 $?
 grep -q 'rine-ghost' "$MUT/m1.log" && pass "M1 names the offending command in its output" \
     || fail "M1 went red without naming /rine-ghost"
-
-# --- M2 -------------------------------------------------------------------------------
-M2="$(mutant m2)"
-python3 - "$M2/plugins/rine/.claude-plugin/plugin.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p))
-d["hooks"] = {"PostCompact": d["hooks"].pop("SessionStart")}
-json.dump(d, open(p, "w"), indent=2)
-PY
-CC_PLUGIN_SRC="$M2" "$PROBES/e16-ab.sh" --authless >"$MUT/m2.log" 2>&1
-expect_rc "M2 e16-ab vs a hookEventName the manifest does not register" 1 $?
-grep -q "is not the event plugin.json registers for session-start.sh" "$MUT/m2.log" \
-    && pass "M2 proves hookEventName is checked against the manifest entry that runs this script, not a hardcoded string" \
-    || fail "M2 went red for some other reason — the derivation is unproven"
 
 # --- M3 -------------------------------------------------------------------------------
 M3="$(mutant m3)"
@@ -98,93 +84,80 @@ else
     fail "M3 the host validator rejected the broken skill — the measured fact that it reads no skill file needs re-measuring, the rig's V6 rationale changed"
 fi
 
-# --- M5 -------------------------------------------------------------------------------
-M5="$(mutant m5)"
-python3 "$PROBES/hookshape.py" flatten "$M5/plugins/rine/scripts/session-start.sh" >/dev/null \
-    && pass "M5 fixture built: emit_context emits the pre-fix top-level envelope" \
-    || fail "M5 fixture could not be built — the flattened-envelope regression gate is unproven"
-CC_PLUGIN_SRC="$M5" "$PROBES/e16-ab.sh" --authless >"$MUT/m5.log" 2>&1
-expect_rc "M5 e16-ab vs the flattened top-level envelope" 1 $?
-grep -q 'top-level additionalContext' "$MUT/m5.log" \
-    && pass "M5 names the defect the host silently ignores" \
-    || fail "M5 went red for some other reason — the flattened-envelope shape is not what it caught"
-
 # --- M6 -------------------------------------------------------------------------------
 M6="$(mutant m6)"
 printf '\nThe statusline shows your unread count.\n' >> "$M6/plugins/rine/README.md"
 CC_PLUGIN_SRC="$M6" "$PROBES/e15-slash.sh" --authless >"$MUT/m6.log" 2>&1
 expect_rc "M6 e15-slash vs a README that promises the deleted statusline" 1 $?
-grep -q 'promises a statusline' "$MUT/m6.log" \
+grep -q 'promises a settings statusline' "$MUT/m6.log" \
     && pass "M6 names the file and line that carries the false claim" \
     || fail "M6 went red without naming the statusline claim"
-
-# --- M7 -------------------------------------------------------------------------------
-M7="$(mutant m7)"
-python3 - "$M7/plugins/rine/scripts/lib/cli-version.sh" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read()
-old = "        if (( 10#${h:-0} < 10#${w:-0} )); then\n            return 0\n        fi\n"
-assert t.count(old) == 1, "cli-version.sh's below-floor arm moved; M7 mutates nothing"
-open(p, "w", encoding="utf-8").write(t.replace(old, "", 1))
-PY
-CC_PLUGIN_SRC="$M7" "$PROBES/cli-floor.sh" >"$MUT/m7.log" 2>&1
-expect_rc "M7 cli-floor vs a floor check that never reports 'below'" 1 $?
-# Failure-only text. Plain `below-floor` matches the PASS line the unmutated probe prints, so
-# it corroborated nothing: it was green whether or not the mutant was caught.
-grep -qE '^FAIL[[:space:]]+below-floor: .*absent from additionalContext' "$MUT/m7.log" \
-    && pass "M7 names the below-floor case that stopped being announced" \
-    || fail "M7 went red for some other reason — the version sentence is unproven"
-
-# --- M8 -------------------------------------------------------------------------------
-M8="$(mutant m8)"
-python3 - "$M8/plugins/rine/scripts/session-start.sh" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read()
-old = '    msg="${msg//\\"/\\\\\\"}"'
-hits = [ln for ln in t.splitlines() if ln.startswith(old)]
-assert len(hits) == 1, f"emit_context's quote escape moved; M8 mutates nothing ({len(hits)} hits)"
-open(p, "w", encoding="utf-8").write(t.replace(hits[0] + "\n", "", 1))
-PY
-CC_PLUGIN_SRC="$M8" "$PROBES/hookenv.sh" >"$MUT/m8.log" 2>&1
-expect_rc "M8 hookenv vs emit_context without its quote escape" 1 $?
-grep -qE 'hostile.*(not JSON|not a JSON object)' "$MUT/m8.log" \
-    && pass "M8 caught it on the hostile config path, which is the only place it shows" \
-    || fail "M8 went red somewhere other than the hostile path"
-
-# --- M9 -------------------------------------------------------------------------------
-M9="$(mutant m9)"
-python3 - "$M9/plugins/rine/scripts/session-start.sh" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read()
-hits = [ln for ln in t.splitlines() if ln.strip().startswith('msg="${msg//[$\'\\001\'')]
-assert len(hits) == 1, f"emit_context's control strip moved; M9 mutates nothing ({len(hits)} hits)"
-shell_out = '    msg="$(printf \'%s\' "$msg" | tr -d \'\\000-\\037\')"'
-open(p, "w", encoding="utf-8").write(t.replace(hits[0], shell_out, 1))
-PY
-CC_PLUGIN_SRC="$M9" "$PROBES/hookenv.sh" >"$MUT/m9.log" 2>&1
-expect_rc "M9 hookenv vs a tr pipeline back on the emit path" 1 $?
-grep -q 'hook exited 127' "$MUT/m9.log" \
-    && pass "M9 shows the exact failure: a starved PATH takes the hook to exit 127, not to exit 0" \
-    || fail "M9 went red without the exit-127 signature — the starvation leg is not what caught it"
-
-# --- M10 ------------------------------------------------------------------------------
-M10="$(mutant m10)"
-sed -i 's/\\"//g' "$M10/plugins/rine/.claude-plugin/plugin.json"
-CC_PLUGIN_SRC="$M10" "$PROBES/e16-ab.sh" --hostjudge >"$MUT/m10.log" 2>&1
-expect_rc "M10 e16-ab --hostjudge vs an unquoted plugin-root placeholder" 1 $?
-grep -q 'SessionStart) error.*not found' "$MUT/m10.log" && pass "M10 shows the host's shell split the spaced path" \
-    || fail "M10 went red without the split-path signature — the quoting is not what it caught"
 
 # --- M11 ------------------------------------------------------------------------------
 M11="$(mutant m11)"
 sed -i 's/^ARG CLAUDE_CODE_VERSION=.*/ARG CLAUDE_CODE_VERSION=0.0.0/' "$M11/rig/Dockerfile"
 CC_PLUGIN_SRC="$M11" "$PROBES/validate.sh" >"$MUT/m11.log" 2>&1
 expect_rc "M11 validate vs an image that is not the tree's pin" 1 $?
-grep -q "not built at the tree's pin" "$MUT/m11.log" && [ "$(grep -c 'does not name the tested Claude Code version' "$MUT/m11.log")" -eq 2 ] && pass "M11 names the unbuilt pin and both READMEs' stale tested-version claim" \
+grep -q "not built at the tree's pin" "$MUT/m11.log" && [ "$(grep -c 'does not name the Claude Code version floor' "$MUT/m11.log")" -eq 2 ] && pass "M11 names the unbuilt pin and both READMEs' stale version-floor claim" \
     || fail "M11 lacks the pin-mismatch signature or one of the two README rows — the pin binding is unproven"
+
+# --- M12-M40 --------------------------------------------------------------------------
+# One function, one table. Each id is applied by mutate.py to its own copy and must take
+# mod-test to rc=1 with at least one parsed failing test — a RED run that never started
+# (no `mod-test N pass, N fail` line) is a hole, not a catch.
+prove() {
+    local id="$1" desc="$2" dir rc fail_n
+    dir="$(mutant "$(printf '%s' "$id" | tr 'A-Z' 'a-z')")"
+    if ! python3 "$HERE/mutate.py" "$dir" "$id" >"$MUT/$id.mutate.log" 2>&1; then
+        fail "$id anchor moved — mutate.py could not apply the mutation, so the gate is unproven"
+        return
+    fi
+    CC_PLUGIN_SRC="$dir" "$PROBES/mod-test.sh" >"$MUT/$id.log" 2>&1
+    rc=$?
+    expect_rc "$id mod-test vs $desc" 1 "$rc"
+    fail_n="$(grep -oE 'mod-test [0-9]+ pass, [0-9]+ fail' "$MUT/$id.log" | tail -1 | sed -E 's/.*, ([0-9]+) fail/\1/')"
+    if [ -n "$fail_n" ] && [ "$fail_n" -ge 1 ]; then
+        pass "$id mod-test went RED with $fail_n failing test(s)"
+    else
+        fail "$id did not go RED: a gate with no failing test over this defect is a hole"
+    fi
+}
+
+while IFS='|' read -r id desc; do
+    [ -n "$id" ] || continue
+    prove "$id" "$desc"
+done <<'TABLE'
+M12|the supervisor marks a run live before the phase is live
+M13|sanitize stops stripping a lone ESC and keeps ESC out of INVISIBLE
+M20|sanitize's invisible set narrowed to a hand-written list
+M14|an allow-listed sender is woken before the deny check
+M15|lease read-back: acquire trusts its own write without reading it back
+M16|the verification status check is forced true
+M17|the mutating-command guard is disabled
+M17b|a guard failure is swallowed instead of reported
+M18|the wake rate limit is forced allowed
+M19|the backlog intent is dropped
+M21|list trust is forced true
+M22|turnComplete ignores the agentId filter
+M23|a permission downgrade is never reported
+M24|the envelope digest is not verified
+M25|the wake gate skips the allowlist check, webhook events included
+M26|a message from this agent wakes whatever its type
+M27|a webhook wake no longer checks the read answered for this agent
+M28|the CLI's own lifecycle lines refresh the server-silence clock
+M29|the 3 s connected settle publishes live for a run that is already overdue
+M30|the 3 s connected settle counts a child as healthy with no server frame
+M31|a run that never got a server frame is not dated from its first connected
+M32|a CLI connecting line lifts a stale status
+M33|the stream argv drops --heartbeat-timeout
+M34|a lifecycle line with an unknown state refreshes the server-silence clock
+M35|a stale run that never got a server frame loses its start date
+M36|Reply no longer closes the inbox before opening the reply pane
+M37|a reply pane that does not open leaves the person with no inbox
+M38|the pane stops hinting how to get the keyboard
+M39|a pane letter collides with the band's Hand to Claude letter
+M40|the CLI silence timeout leaves the gap between the stale and dead thresholds
+TABLE
 
 # --- M4 -------------------------------------------------------------------------------
 if have_cc_credential; then

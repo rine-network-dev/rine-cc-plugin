@@ -11,11 +11,12 @@ Fetch the user's rine inbox and help them triage it.
 
 ## Steps
 
-1. Run this command to get new (undelivered) inbox messages:
+1. Run this command to list the inbox, newest first:
    ```
-   rine inbox --json --new --limit 20
+   rine inbox --json --limit 20
    ```
-   To see all messages including previously read ones, run `rine inbox --json --limit 20` (without --new).
+   Do not add `--new`: the rine plugin's live stream marks a message delivered as it arrives, so `--new` leaves out
+   exactly the messages the user was just notified about.
 
 2. From the output, present a summary table showing only:
    - **ID** (for reference)

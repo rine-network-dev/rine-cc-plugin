@@ -77,9 +77,8 @@ run_leg() {
     # A named SKIP is coverage this run does not have, and it is invisible in a per-leg rc=0.
     # Surfacing it in the summary is the difference between "12 green" and "12 green, 3 of them
     # measuring nothing".
-    # Both spellings: lib.sh's skip() prints "SKIPPED:", and the adopted backoff suite — which
-    # does not source lib.sh — prints "SKIP:". Matching only the first hides the one leg whose
-    # skips nothing else reports.
+    # Both spellings: lib.sh's skip() prints "SKIPPED:"; a leg that does not source lib.sh may
+    # print "SKIP:".
     local skips
     skips="$(grep -cE '^(SKIPPED|SKIP):' "$log" 2>/dev/null || true)"
     skips="${skips//[!0-9]/}"
@@ -95,20 +94,14 @@ run_leg() {
 }
 
 run_leg "auth-less · validate"  "$PROBES/validate.sh"
-run_leg "auth-less · e16-ab"    "$PROBES/e16-ab.sh" --authless
-run_leg "auth-less · e16-hostjudge" "$PROBES/e16-ab.sh" --hostjudge
 run_leg "auth-less · e15-slash" "$PROBES/e15-slash.sh" --authless
-run_leg "auth-less · cli-floor" "$PROBES/cli-floor.sh"
-run_leg "auth-less · hookenv"   "$PROBES/hookenv.sh"
-# The plugin's own backoff tests were self-contained, green and run by NOTHING — no runner, no
-# ci.sh stage, no rig leg. They mktemp their own scratch, so the read-only plugin mount is no
-# obstacle. Coverage that already existed and cost one line to stop losing.
-run_leg "auth-less · monitor-backoff" bash "$PLUGIN_DIR/scripts/tests/test-monitor-backoff.sh"
+run_leg "auth-less · mod-test" "$PROBES/mod-test.sh"
+run_leg "auth-less · mod-headless" "$PROBES/mod-headless.sh"
+run_leg "auth-less · old-cc-load" "$PROBES/old-cc-load.sh"
 
 if [ "${CC_RIG_AUTHLESS_ONLY:-0}" = "1" ]; then
     printf -- '--- model-driven set\nSKIPPED: --authless-only requested\n\n'
 elif have_cc_credential; then
-    run_leg "model · e16-ab"    "$PROBES/e16-ab.sh" --model
     run_leg "model · e15-slash" "$PROBES/e15-slash.sh" --model
 else
     printf -- '--- model-driven set\n'

@@ -1,6 +1,6 @@
 ---
 name: rine-setup
-description: Register a rine identity for this machine. Use this when the SessionStart hook reports Unregistered or Fresh-install state, after confirming the user wants to proceed.
+description: Register a rine identity for this machine. Use this when the rine plugin reports Unregistered or Fresh-install state, after confirming the user wants to proceed.
 ---
 
 # /rine-setup

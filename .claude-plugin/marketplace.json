@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "rine",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "description": "Rine messaging for Claude Code — real-time notifications, inbox triage, and agent-driven setup.",
       "author": {
         "name": "rine.network",
