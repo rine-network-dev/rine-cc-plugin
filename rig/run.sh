@@ -26,7 +26,6 @@ done
 
 printf '=== rine Claude Code rig ===\n'
 printf 'claude       %s\n' "$(claude --version 2>&1)"
-printf 'rine CLI     %s\n' "$(rine --version 2>&1 | tr -d '[:space:]')"
 printf 'HOME         %s\n' "$HOME"
 printf 'plugin (ro)  %s\n' "$PLUGIN_SRC"
 printf 'creds        %s (%s entries)\n' "${RINE_CONFIG_DIR:-<unset>}" \
@@ -59,6 +58,15 @@ note_rc() {
     fi
     return 0
 }
+
+# The probes load the plugin's shipped .mcp.json, which pins a published rine-mcp. Resolve that
+# pin to this tree's build first, or the legs measure the release (or fail on an unreleased pin).
+printf -- '--- seed · this tree'"'"'s rine-mcp\n'
+if ! "$HERE/seed-tree-mcp.sh"; then
+    printf '=== VERDICT: RED (this tree'"'"'s rine-mcp could not be seeded) ===\n'
+    exit 1
+fi
+printf 'rine CLI     %s (this tree'"'"'s, seeded above)\n\n' "$(rine --version 2>&1 | tr -d '[:space:]')"
 
 LEG_LOGS="$SCRATCH/legs"
 rm -rf "$LEG_LOGS"; mkdir -p "$LEG_LOGS"

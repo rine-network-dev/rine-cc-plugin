@@ -19,7 +19,7 @@
 #                  ships (deleted: a plugin settings.json cannot install a working
 #                  statusLine on this host)
 # M11 validate  · the tree's pin moves: image and both READMEs no longer match → must go RED
-# M12-M40 mod-test · one defect per row of the TABLE further down, each
+# M12-M69 mod-test · one defect per row of the TABLE further down, each
 #                  applied by mutate.py → must go RED
 
 set -uo pipefail
@@ -157,6 +157,34 @@ M37|a reply pane that does not open leaves the person with no inbox
 M38|the pane stops hinting how to get the keyboard
 M39|a pane letter collides with the band's Hand to Claude letter
 M40|the CLI silence timeout leaves the gap between the stale and dead thresholds
+M41|the org tab's acknowledgement is also written to $.state, beside the plugin's store
+M42|the org feed starts before the acknowledgement is kept
+M43|the org tab's w handler no longer stores the acknowledgement
+M44|a malformed stored acknowledgement counts as acknowledged
+M45|the plugin restarts the org feed after exit 3 (no org key)
+M46|the org tab's size budget is ten times larger
+M47|message text is written to $.state when the selection moves
+M48|a repeated tail of vi keys is applied again (the sequence cursor is ignored)
+M49|the i key no longer asks for the inbox
+M50|a clear or resume ends the org feed
+M51|session end never ends the org feed
+M52|closing the inbox pane leaves the org feed running
+M53|stopping the org wiring no longer stops the feed
+M54|leaving the org tab leaves the feed running
+M55|a key post of any size is accepted
+M56|the search prompt takes control characters
+M58|a finding the tab already holds is kept again
+M59|the tab's finding dedupe ignores the group
+M60|the tab keeps every finding (no limit)
+M61|the findings bar is drawn while there are no findings
+M62|a finding is listed without its group
+M63|the f key opens the findings list while there are none
+M64|an open findings list passes every key through instead of swallowing it
+M65|the Findings button is offered while there are none
+M66|the tab never says older findings were dropped
+M67|a finding frame from the feed is not kept
+M68|a prompt submit no longer folds the band
+M69|the folded entries add no line under the prompt
 TABLE
 
 # --- M4 -------------------------------------------------------------------------------

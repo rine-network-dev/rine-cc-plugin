@@ -41,8 +41,14 @@ COMPOSE=${CC_RIG_COMPOSE:-"docker compose -p rine-cc-e2e -f $ROOT/compose.cc.yml
 STACK="docker compose -f $ROOT/compose.threads-e2e.yml"
 CNAME=rine-cc-e2e-cc
 API_CNAME=rine-threads-e2e-api-1
-HOST_API=http://localhost:7199
-RIG_API=http://host.docker.internal:7199
+# The local stack publishes its api on the docker bridge gateway (compose.threads-e2e.yml reads
+# E2E_BRIDGE_IP) and signs its tokens for that origin, so the host and the rig use the one URL.
+# shellcheck source=../../scripts/lib/bridge-origin.sh
+. "$ROOT/scripts/lib/bridge-origin.sh"
+E2E_BRIDGE_IP="$(e2e_bridge_gateway)" || exit 1
+export E2E_BRIDGE_IP
+RIG_API=http://$E2E_BRIDGE_IP:7199
+HOST_API=$RIG_API
 OUTD=/work/scratch/e2e-out
 PROJ=/work/scratch/e2e-proj
 COPY=/work/scratch/e2e/plugin
@@ -98,11 +104,20 @@ while :; do
     [ "$(date +%s)" -lt "$DEADLINE" ] || die "the local rine stack never answered $HOST_API/health with 200 (last: $CODE)"
     sleep 2
 done
+e2e_assert_audience "$HOST_API" "$RIG_API" cc-rig || die "the local rine stack checks token assertions for another origin than the rig's clients use"
 
 # b. the rig container
+# Docker creates a missing bind-mount source as root, which the non-root rig user cannot write.
+for d in "$ROOT/.rine-rig-cc-a" "$ROOT/.rine-rig-cc-b"; do
+    mkdir -p "$d" && [ -w "$d" ] || die "$d is not writable by this user (a root-owned dir from an earlier run?)"
+done
 docker rm -f "$CNAME" >/dev/null 2>&1 || true
 $COMPOSE run -d --name "$CNAME" --user "$(id -u):$(id -g)" cc sleep infinity >/dev/null \
     || die "the rig container did not start"
+
+# The plugin's shipped .mcp.json pins a published rine-mcp; resolve that pin to this tree's build,
+# as run.sh does, or the real REPL would measure the release.
+cx /work/rig/seed-tree-mcp.sh || die "this tree's rine-mcp could not be seeded"
 
 # c. the credential, by name only
 if ! cx sh -c '[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -n "${ANTHROPIC_API_KEY:-}" ]'; then
@@ -113,10 +128,18 @@ fi
 # d. the two identities
 # Identities left by an earlier run are reused (onboarding is capped). The host store holding the lists-trust
 # digests goes with the state dir: a stale digest makes the fresh lists read as edited outside /rine, correctly.
-if cx_as alice rine --json whoami >/dev/null 2>&1 && cx_as bob rine --json whoami >/dev/null 2>&1; then
+# whoami_field WHO FIELD — one field of that identity's whoami, parsed on the host. whoami exits 0 with
+# {"logged_in": false} when there is no identity, so only the field proves one.
+whoami_field() {
+    cx_as "$1" rine --json whoami \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$2"
+}
+if whoami_field alice agent >/dev/null 2>&1 && whoami_field bob agent >/dev/null 2>&1; then
     cx sh -c 'rm -rf /work/creds/state /work/creds-b/state "$CLAUDE_CONFIG_DIR/plugins/store"' || die "the plugin state could not be cleared"
 else
-    cx sh -c 'find /work/creds /work/creds-b -mindepth 1 -delete' || die "the cred dirs could not be emptied"
+    cx sh -c 'find /work/creds /work/creds-b -mindepth 1 -delete && rm -rf "$HOME/.config/rine-owner" "$CLAUDE_CONFIG_DIR/plugins/store"' \
+        && cx rm -rf "$BOB_OWNER_DIR" \
+        || die "the cred dirs could not be emptied"
     S="e2e$RANDOM$RANDOM"
     # A "Rate limited" refusal here is that cap, not a defect; rerun after it lapses.
     cx_as alice rine --json onboard --email "alice-$S@gmail.com" --name "A$S" --slug "a$S" \
@@ -125,14 +148,10 @@ else
         --agent-name bob >/dev/null || die "bob could not be onboarded (the stack's 24 h registration cap?)"
 fi
 
-# whoami_field WHO FIELD — one field of that identity's whoami, parsed on the host.
-whoami_field() {
-    cx_as "$1" rine --json whoami \
-        | python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$2"
-}
 ALICE="$(whoami_field alice agent)" || die "alice's whoami did not report a handle"
 BOB="$(whoami_field bob agent)" || die "bob's whoami did not report a handle"
 [ -n "$ALICE" ] && [ -n "$BOB" ] || die "a handle is empty after onboarding (alice='$ALICE' bob='$BOB')"
+[ "$ALICE" != "$BOB" ] || die "alice and bob resolve to the same identity ($ALICE)"
 pass "identities onboarded: $ALICE and $BOB"
 
 # e. seed claude's config so no onboarding or trust dialog appears (no value is ever printed)
@@ -173,10 +192,11 @@ chmod +x $SHIM/rine" || die "the rine shim could not be written"
 session_start e2e || die "claude REPL did not start"
 
 STEP_TITLES=(
-    "status line goes live" "wake before the first typed prompt is held back" "notify row for a non-allowlisted message"
+    "status line goes live" "wake before the first typed prompt is held back" "notify row for a non-allowlisted message, then the fold under the prompt"
     "allowlisted idle message wakes Claude" "an unverifiable message does not wake" "preview mode, band, pane and hand-off"
     "reply pane sends" "api pause and stop: stale, backoff, recovery" "plugin reload keeps the stream"
     "bypassPermissions session does not wake" "webhook event wakes an idle session (--with-chain)" "ToolResult card with raw toggle in ctrl+o (--with-chain)"
+    "org tab: acknowledgement, no org key, rows of a recorded org"
 )
 
 # One step's failure must not stop the next: the steps record pass/fail and never exit.
@@ -185,7 +205,7 @@ run_step() {
     "step$1" || true
 }
 
-# Step 10 restarts the session in bypassPermissions mode, so it runs last.
+# Step 10 restarts the session in bypassPermissions mode, so it runs last but for step 13, which starts its own sessions.
 for n in 1 2 3 4 5 6 7 8 9; do run_step "$n"; done
 if [ "$WITH_CHAIN" = "1" ]; then
     run_step 11
@@ -194,6 +214,7 @@ else
     skip "step11 and step12 need the code chain's webhook wake and ToolResult card; run with --with-chain"
 fi
 run_step 10
+run_step 13
 
 # --- end --------------------------------------------------------------------------------
 probe_exit

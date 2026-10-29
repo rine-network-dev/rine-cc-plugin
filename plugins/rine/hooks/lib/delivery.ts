@@ -10,7 +10,7 @@ import type { Ports } from './ports'
 import { createReader, loadPreview } from './preview'
 import { route, senderOf, toEntry } from './router'
 import type { StreamMessage } from './frames'
-import { safeLine } from './sanitize'
+import { fittedHandle } from './shown-handle'
 
 export type DeliveryDeps = {
   ports: Pick<Ports, 'clock' | 'sink' | 'run'>
@@ -80,7 +80,7 @@ export function createDelivery(deps: DeliveryDeps): Delivery {
   const notify = async (entry: RineEntry, rebound: string | null): Promise<RineEntry> => {
     const rowIndex = await notifyRows([entry])
     say(entry, arrivalToast(entry, null))
-    if (rebound !== null) ports.sink.toast(`rine: ${safeLine(rebound, 48)} is now a different agent`)
+    if (rebound !== null) ports.sink.toast(`rine: ${fittedHandle(rebound, 48)} is now a different agent`)
     return { ...entry, rowIndex }
   }
 

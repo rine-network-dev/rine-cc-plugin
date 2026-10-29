@@ -1,5 +1,6 @@
 # Base image for the CONTAINED Claude Code plugin probe rig.
-# Claude Code and the rine CLI install INSIDE the container (see ../../compose.cc.yml).
+# Claude Code installs INSIDE the container, and the rine CLI is seeded into it from this tree
+# (see ../../compose.cc.yml and seed-tree-mcp.sh).
 # Nothing Claude-Code-related is ever installed on the host — every install, build,
 # typecheck and probe for this plugin happens inside this container, and a devDependency
 # pulled in "for types only" still counts as a host install.
@@ -34,33 +35,37 @@ RUN apt-get update \
 # and moves between releases, so mod-test and mod-headless are what notice a release that stops
 # accepting a shape the plugin uses. validate.sh V1 reads this line, so an image built from an
 # older pin goes red rather than measuring the wrong host.
-ARG CLAUDE_CODE_VERSION=2.1.287
+ARG CLAUDE_CODE_VERSION=2.1.295
 
 # The plugin's scripts shell out to `rine` and gate every mode decision on `command -v rine`,
 # a binary-presence check with no version floor: an old CLI is indistinguishable from a
-# current one to that check alone. The rig therefore installs the PUBLISHED CLI a plugin user
-# would actually have, not a host build of rine-cli/dist:
-#   - the published CLI is the contract the plugin is written against;
-#   - mounting ./rine-cli/dist would make every probe depend on a host build, and a stale
-#     gitignored dist reads as a wrong branch, not a missing feature — `git status` cannot
-#     see it, and nothing gates it, so a probe run against it would silently test a build
-#     nobody shipped;
-#   - a lane that needs an unreleased verb overrides this build arg, deliberately and visibly.
-ARG RINE_CLI_VERSION=0.20.0
+# current one to that check alone. The image therefore carries NO `rine`: seed-tree-mcp.sh packs
+# THIS tree's rine-cli and installs it into the scratch volume at run time, because the CLI the
+# plugin is written against is the one this tree is about to release, and that release is not on
+# the registry yet. The ENV PATH below is what puts the seeded binary in front of everything,
+# for one-shot runs and `docker exec` alike.
+#   - installing the published CLI here would make every probe measure a release a user
+#     already has, and fail on the first verb a tree adds;
+#   - mounting ./rine-cli/dist would depend on a host build, and a stale gitignored dist reads
+#     as a wrong branch, not a missing feature — the seed refuses a dist that differs from the
+#     one it packs, and ci.sh refuses a dist older than its sources before the rig starts.
+# RINE_CLI_VERSION is the version the seeded CLI must report: validate.sh V2 reads this line, so
+# a tree whose CLI moved without the pin (or an image whose PATH skips the seeded binary) goes
+# red instead of measuring the wrong CLI.
+ARG RINE_CLI_VERSION=0.22.0
 
 # The last Claude Code release that skips the hooks module instead of running it, for
 # old-cc-load.sh: a side-by-side install under /opt/claude-old, so the leg needs no second image
 # and runs inside run.sh on whatever tag ci.sh uses. The 2.1.280 validator rejects shapes
-# 2.1.287 accepts, so that leg never runs `plugin validate`.
+# 2.1.295 accepts, so that leg never runs `plugin validate`.
 ARG OLD_CLAUDE_CODE_VERSION=2.1.280
 
-RUN npm install -g \
-      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
-      "@rine-network/cli@${RINE_CLI_VERSION}" \
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && npm install --prefix /opt/claude-old "@anthropic-ai/claude-code@${OLD_CLAUDE_CODE_VERSION}" \
  && npm cache clean --force
 
 ENV CC_OLD_CLAUDE=/opt/claude-old/node_modules/.bin/claude
+ENV PATH=/work/scratch/node_modules/.bin:${PATH}
 
 ENV npm_config_fund=false \
     npm_config_audit=false \

@@ -5,6 +5,46 @@ All notable changes to the rine Claude Code plugin are documented in this file.
 The plugin version is the one in `plugins/rine/.claude-plugin/plugin.json`. Claude Code keys its
 update cache on that version, so restart Claude Code after updating.
 
+## 0.5.0 — 2026-10-29
+
+The plugin follows the org-root key model and pins the MCP server it runs. Every org registered
+before this release is retired, so you onboard again.
+
+**What you will see differently:**
+
+- The status line asks for CLI 0.22.0 or newer: an older CLI cannot sign in to the current server.
+- Onboarding text and the skills describe the org root and the 24-word recovery phrase. The
+  phrase is written to a file in the owner directory (`RINE_OWNER_DIR`, default
+  `~/.config/rine-owner`); the plugin never shows the words to Claude. Losing both `root.key`
+  and the phrase loses the org; anyone who reads either controls it.
+- The plugin's file guard refuses a Read, Grep, Glob, Write, Edit or Bash call that names
+  `root.key`, the recovery phrase or the owner directory, following the path rather than a
+  substring.
+- `client_secret` and the `RINE_CLIENT_ID` and `RINE_CLIENT_SECRET` variables are gone; the
+  variables are ignored.
+- The plugin acts only as the agent its config directory holds.
+- The root of every member org reads what a group's other members said in the epochs its own
+  agents held, and the group tool descriptions say so.
+- A message an external A2A client posted in cleartext shows in the preview pane and in the
+  `rine_read` and `rine_inbox` cards with "Received as A2A cleartext: this message was not
+  end-to-end encrypted." ahead of the body and a `cleartext, not verified` mark. Before, the
+  cards showed the body with no notice and marked the row as forged.
+
+### Changed
+
+- `.mcp.json` runs `@rine-network/mcp@0.14.0` instead of the latest version, so an update to
+  the MCP package reaches you only through a new plugin release.
+
+### Changed (since the release candidate)
+
+- The `rine-pay` skill documents the `sender-unverifiable` status: the quote's sender's signing key could not be read, nothing was signed or spent, and a retry later can succeed. `inauthentic-quote` now means only that the quote was not signed by the agent that sent it.
+- The plugin requires Claude Code 2.1.295 or newer (it was 2.1.287). The inbox rows now draw the unread dot in the brand teal and the date inside the row's own button, one Tab stop per row, and Claude Code 2.1.294 and older refuse that shape. Claude Code 2.1.287 to 2.1.294 show notifications but cannot draw the `/rine` inbox panel; older versions keep the skills and the MCP tools and get no notifications.
+- The `/rine` pane has an org tab (press `w`) that shows every agent's messages in your org, read with the org key, with vi keys for moving, searching and returning to the inbox (`i`). The tab shows message text, so any other plugin installed in Claude Code can read what the pane shows; the pane says so and asks you to acknowledge it before the first view.
+- Inbox previews no longer put message text in the session state, where every other plugin installed in Claude Code could read it. The text is held in the plugin's own memory and drawn by the band and the pane; after a plugin reload a kept preview asks to be read again. Those plugins can still read what the pane or the band draws, and the docs now say so for the inbox and the org tab alike.
+- The file guard refuses `rine tui` only where it runs as a command: at the start of a command, after `;`, `&&`, `||`, a pipe, `$( )` or backticks, or behind `env`, `sudo`, `exec`, `time`, `npx`, `node` or a path to the binary. A commit message, a grep pattern or an echo that only mentions the words passes. The same check covers `Bash`, `Monitor` and `PowerShell`. It is a tripwire on the command's text, not a control.
+- The docs no longer say messages are shown as metadata only: the org tab and the inbox previews show message text.
+- The org tab's group-key findings read `In <handle>` with the group's handle as it is written (it already starts with `#`), and a reload with `R` clears the findings it held.
+
 ## 0.4.0 — 2026-10-05
 
 The inbox moves into Claude Code itself. A hooks module inside the plugin draws a status line, toasts,

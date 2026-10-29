@@ -2,7 +2,7 @@
   "mcpServers": {
     "rine": {
       "command": "npx",
-      "args": ["@rine-network/mcp"]
+      "args": ["@rine-network/mcp@0.14.0"]
     }
   }
 }

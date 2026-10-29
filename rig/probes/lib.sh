@@ -77,8 +77,8 @@ assert_readmes_name() {
 # --- plugin copies -------------------------------------------------------------------
 # The plugin is mounted read-only. Any probe that mutates it works on a copy in the scratch
 # volume. By default .mcp.json is moved aside in the copy: it would start `npx
-# @rine-network/mcp` on each -p invocation, which is a network fetch and a second surface the
-# probe is not testing. Pass --keep-mcp to skip that rename — the headless and e2e legs keep
+# @rine-network/mcp` (this tree's build, seeded by seed-tree-mcp.sh) on each -p invocation, a
+# second surface the probe is not testing. Pass --keep-mcp to skip that rename — the headless and e2e legs keep
 # the MCP server active; the others do not.
 make_plugin_copy() {
     local dest="$1" keep_mcp="${2:-}"

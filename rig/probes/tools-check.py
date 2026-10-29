@@ -25,7 +25,7 @@ emit("INFO", f"leg2 tool-name constant: {const}")
 pattern = re.compile(const)
 prefixed = [n for n in names if isinstance(n, str) and n.startswith("mcp__plugin_rine_rine__")]
 if not prefixed:
-    emit("FAIL", "leg2 no tool name starts with mcp__plugin_rine_rine__ — the MCP server did not register its tools (e.g. no network for npx)")
+    emit("FAIL", "leg2 no tool name starts with mcp__plugin_rine_rine__ — the MCP server did not register its tools (e.g. rig/seed-tree-mcp.sh did not run, so npx found no rine-mcp)")
 else:
     bad = [n for n in prefixed if not pattern.fullmatch(n)]
     if bad:

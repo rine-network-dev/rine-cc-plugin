@@ -18,7 +18,7 @@ export function messageRow(over: Record<string, unknown> = {}): Record<string, u
     type: 'rine.v1.dm',
     encrypted_payload: 'eyJhbGciOiJIUEtFIn0',
     direction: 'received',
-    encryption_version: 'hpke-v1',
+    encryption_version: 'hpke-hybrid-v2',
     content_type: 'application/json',
     created_at: new Date(NOW - 120_000).toISOString(),
     status: 'new',

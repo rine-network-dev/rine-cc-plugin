@@ -1,23 +1,52 @@
+import { WIDE_RANGES } from './terminal-width-table'
+
 export type Scrubbed = { text: string; hiddenChars: number }
 export type Block = { text: string; hiddenChars: number; truncatedChars: number }
 
-const CSI = /\x1b\[[0-?]*[ -/]*[@-~]/g
-const STRING_SEQUENCE = /\x1b[\]P_^][\s\S]{0,4096}?(\x07|\x1b\\)/g
+// A control string runs to its terminator, or to the end of the input when it has none, so an unterminated
+// sequence never leaves its payload on screen. The 8-bit introducers are handled like their ESC forms.
+// The same ruleset as rine-core/src/terminal-text.ts; tests/terminal-text-vectors.ts is generated from the vectors
+// both are held to.
+const OSC = /(?:\x1b\]|\u009d)[\s\S]*?(?:\x07|\x1b\\|\u009c|$)/g
+const OTHER_STRING = /(?:\x1b[PX^_]|[\u0090\u0098\u009e\u009f])[\s\S]*?(?:\x1b\\|\u009c|$)/g
+const CSI = /(?:\x1b\[|\u009b)[0-?]*[ -/]*[@-~]?/g
 const LONE_ESC = /\x1b/g
 
 const MAX_SCRUBBED_CHARS = 16384
 
 const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\p{Cf}\p{Default_Ignorable_Code_Point}]/gu
 
-const COMBINING = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/u
-const WIDE =
-  /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u
+// Width is per grapheme cluster, as in rine-core/src/terminal-width.ts: the widest code point of the cluster.
+// The wide ranges are generated from the same Unicode data as rine-core's (scripts/gen-terminal-width.mjs).
+const SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+const ZERO_WIDTH = /^[\p{M}\p{Cf}\p{Cc}]$/u
+
+function isWide(cp: number): boolean {
+  let lo = 0
+  let hi = WIDE_RANGES.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const [first, last] = WIDE_RANGES[mid] as readonly [number, number]
+    if (cp < first) hi = mid - 1
+    else if (cp > last) lo = mid + 1
+    else return true
+  }
+  return false
+}
 
 const RINE_TYPE = /^rine\.v1\.[a-z0-9_]{1,40}$/
 
-function cellWidth(ch: string): number {
-  if (COMBINING.test(ch)) return 0
-  return WIDE.test(ch) ? 2 : 1
+function clusters(s: string): string[] {
+  return Array.from(SEGMENTER.segment(s), (part) => part.segment)
+}
+
+function clusterWidth(cluster: string): 0 | 1 | 2 {
+  let width: 0 | 1 = 0
+  for (const ch of cluster) {
+    if (isWide(ch.codePointAt(0) as number)) return 2
+    if (!ZERO_WIDTH.test(ch)) width = 1
+  }
+  return width
 }
 
 function clampForScrub(s: string): { text: string; dropped: number } {
@@ -31,7 +60,7 @@ function clampForScrub(s: string): { text: string; dropped: number } {
 
 export function scrub(s: string, isOneLine: boolean): Scrubbed {
   const before = Array.from(s).length
-  const withoutSequences = s.replace(CSI, '').replace(STRING_SEQUENCE, '').replace(LONE_ESC, '')
+  const withoutSequences = s.replace(OSC, '').replace(OTHER_STRING, '').replace(CSI, '').replace(LONE_ESC, '')
   const deleted = withoutSequences.replace(INVISIBLE, '')
   const hiddenChars = before - Array.from(deleted).length
   const spaced = deleted.replace(/\t/g, ' ')
@@ -42,9 +71,14 @@ export function scrub(s: string, isOneLine: boolean): Scrubbed {
   return { text, hiddenChars }
 }
 
+/** The grapheme clusters of `s`, each with the cells it takes on screen. */
+export function cellsOf(s: string): { cluster: string; width: 0 | 1 | 2 }[] {
+  return clusters(s).map((cluster) => ({ cluster, width: clusterWidth(cluster) }))
+}
+
 export function displayWidth(s: string): number {
   let width = 0
-  for (const ch of s) width += cellWidth(ch)
+  for (const cluster of clusters(s)) width += clusterWidth(cluster)
   return width
 }
 
@@ -52,14 +86,15 @@ export function safeLine(s: string, maxCells: number): string {
   if (maxCells < 1) return ''
   const text = scrub(clampForScrub(s).text, true).text
   if (displayWidth(text) <= maxCells) return text
-  const chars = Array.from(text)
   let width = 0
-  let cut = 0
-  for (let char = chars[0]; char !== undefined && width + cellWidth(char) + 1 <= maxCells; char = chars[cut]) {
-    width += cellWidth(char)
-    cut += 1
+  let kept = ''
+  for (const cluster of clusters(text)) {
+    const columns = clusterWidth(cluster)
+    if (width + columns + 1 > maxCells) break
+    width += columns
+    kept += cluster
   }
-  return chars.slice(0, cut).join('') + '…'
+  return kept + '…'
 }
 
 export function safeBlock(s: string, maxChars: number): Block {

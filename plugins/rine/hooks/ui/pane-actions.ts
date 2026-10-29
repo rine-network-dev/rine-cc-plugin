@@ -2,7 +2,7 @@ import type { RineEntry, RineListEntry, RineLists, RinePrefs } from '../../types
 import type { HandOffResult } from '../lib/delivery-wake'
 import { addEntry, parseHandle, removeEntry, type ListName } from '../lib/lists'
 import { safeLine } from '../lib/sanitize'
-import { muteDeadline, withMute, withPreview, type MuteSpec } from '../lib/prefs'
+import { muteDeadline, withMotion, withMute, withPreview, type MuteSpec } from '../lib/prefs'
 
 /** `untrusted`: saved, but the lists changed outside /rine, so only Confirm lets an allow entry wake Claude. */
 export type Edited = 'ok' | 'unchanged' | 'failed' | 'untrusted'
@@ -29,6 +29,7 @@ export type Actions = {
   mute: (spec: MuteSpec) => Promise<string>
   unmute: () => Promise<string>
   setPreview: (isOn: boolean, held: number) => Promise<string>
+  setMotion: (isOn: boolean) => Promise<string>
   addTo: (name: ListName, entry: RineListEntry) => Promise<string>
   removeFrom: (name: ListName, entry: RineListEntry) => Promise<string>
   confirm: () => Promise<string>
@@ -96,6 +97,9 @@ export function createActions(env: UiEnv): Actions {
         ? 'preview on: new messages wait for your review'
         : `preview off${held > 0 ? `: ${held} held stay held, /rine to hand them over` : ''}`
       return saved(await env.editPrefs((prefs) => withPreview(prefs, isOn)), text)
+    },
+    async setMotion(isOn) {
+      return saved(await env.editPrefs((prefs) => withMotion(prefs, isOn)), isOn ? 'motion on' : 'motion off: the terminal stays still')
     },
     async addTo(name, entry) {
       let isFull = false

@@ -5,7 +5,7 @@ import { bodyOf, pathOf, type LeaseBody } from './wiring-files'
 import { BOB, OWN_ID, T0, begin, entriesOf, newWorld, start, streamPhase, until, type World } from './wiring-kit'
 
 const NONCE = 'n'.repeat(32)
-const SEEDED_ENTRY = { id: 'aaaaaaaa-0009', from: BOB, fromAgentId: 'agent-b', group: null, groupId: null, type: 'rine.v1.dm', conversationId: 'c', encryption: 'hpke-v1', createdAt: '2026-10-02T09:00:00Z', receivedAt: T0 - 60000, list: 'allow', disposition: 'notified', state: 'unread', rowIndex: null }
+const SEEDED_ENTRY = { id: 'aaaaaaaa-0009', from: BOB, fromAgentId: 'agent-b', group: null, groupId: null, type: 'rine.v1.dm', conversationId: 'c', encryption: 'hpke-hybrid-v2', createdAt: '2026-10-02T09:00:00Z', receivedAt: T0 - 60000, list: 'allow', disposition: 'notified', state: 'unread', rowIndex: null }
 const lease = (over: Record<string, unknown> = {}) => ({ nonce: NONCE, agentId: OWN_ID, sessionId: 'session-0', cwd: '/proj', heartbeatAt: T0 - 5000, releasedAt: null, wakes: [T0 - 100000], ...over })
 const ledger = { v: 1, entries: [SEEDED_ENTRY], appliedRequests: [] }
 const sealed = (value: unknown): Promise<string> => seal(JSON.stringify(value))

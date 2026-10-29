@@ -11,7 +11,7 @@ export function makeEntry(over: Partial<RineEntry> = {}): RineEntry {
     groupId: null,
     type: 'rine.v1.dm',
     conversationId: null,
-    encryption: 'hpke-v1',
+    encryption: 'hpke-hybrid-v2',
     createdAt: '2026-10-02T10:00:00Z',
     receivedAt: 1_000_000,
     list: 'none',

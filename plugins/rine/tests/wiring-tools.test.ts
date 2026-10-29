@@ -3,6 +3,7 @@ import { messageLine } from './frame-lines'
 import { pathOf } from './wiring-files'
 import { MSG_ID, entriesOf, goLive, newWorld, start, until } from './wiring-kit'
 
+const OWNER_DENIED = 'rine: the org root key and recovery phrase belong to the owner; they are never read or edited in a session.'
 const DENIED = 'rine: those files are managed from /rine; ask the user to change them there.'
 
 test('test_guard_writeIntoTheStateFolder_isDenied', async ($, on) => {
@@ -27,6 +28,23 @@ test('test_guard_shellCommandNamingTheStateFolder_isDenied', async ($, on) => {
   await goLive(world)
   const answer = await $.tool.call({ tool: 'Bash', command: 'echo x > /cfg/state/cc/lists.json' } as never)
   expect(answer).toEqual({ deny: DENIED })
+})
+
+test('test_guard_readToolsReachingTheOwnerDir_areDenied', async ($, on) => {
+  const world = newWorld(on, { env: { RINE_OWNER_DIR: '/srv/keys' } })
+  await start($, world)
+  await goLive(world)
+  const calls = [
+    { tool: 'Read', file_path: '/srv/keys/root.key' },
+    { tool: 'Read', file_path: '/srv/keys/token_cache.json' },
+    { tool: 'Grep', path: '/srv', pattern: '.' },
+    { tool: 'Glob', pattern: '/srv/keys/*' },
+    { tool: 'Bash', command: 'cat /srv/keys/recovery-phrase.txt' }
+  ]
+  for (const call of calls) {
+    expect(await $.tool.call(call as never)).toEqual({ deny: OWNER_DENIED })
+  }
+  expect(await $.tool.call({ tool: 'Read', file_path: '/proj/a.txt' } as never)).toEqual({ result: 'done' })
 })
 
 test('test_guard_checkThrows_deniesTheCall', async ($, on) => {

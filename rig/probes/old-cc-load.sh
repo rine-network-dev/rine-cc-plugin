@@ -4,9 +4,9 @@
 # Proves the 0.4.0 tree still loads on a Claude Code release that PREDATES the hooks-module
 # API: such a release must load the skills and the MCP server and skip only the module. The
 # old release is installed side-by-side in the image at $CC_OLD_CLAUDE (2.1.280). This leg
-# never runs `plugin validate`: the 2.1.280 validator rejects shapes 2.1.287 accepts, so a
+# never runs `plugin validate`: the 2.1.280 validator rejects shapes 2.1.295 accepts, so a
 # validate failure here would say nothing about whether the plugin loads.
-# Asserts: O1 the old binary ran (non-empty debug log); O2 its --version is older than 2.1.287; O3 no manifest/plugin.json error in the debug log;
+# Asserts: O1 the old binary ran (non-empty debug log); O2 its --version is older than 2.1.287, the first release with the hooks-module API; O3 no manifest/plugin.json error in the debug log;
 # O4 the log loaded N skills from plugin rine, N = the copy's skills/ dirs and N > 0;
 # O5 the debug log shows plugin:rine:rine connected; O6 the log says the hooks
 # module was NOT loaded (skipped, not crashed).
@@ -48,13 +48,13 @@ fi
 if [ "$(printf '%s\n2.1.287\n' "$EXPECT_VER" | sort -V | head -1)" = "$EXPECT_VER" ] && [ "$EXPECT_VER" != "2.1.287" ]; then
     pass "O2 ${EXPECT_VER} predates the hooks-module API (2.1.287)"
 else
-    fail "O2 ${EXPECT_VER} is not older than 2.1.287 — this leg is not testing an old host"
+    fail "O2 ${EXPECT_VER} is not older than 2.1.287, the hooks-module API — this leg is not testing a pre-hooks host"
 fi
 # --- O5: the MCP server connects ------------------------------------------------------------
 if grep -qE 'MCP server "plugin:rine:rine": Successfully connected' "$LOG"; then
     pass "O5 MCP server plugin:rine:rine connected on the old host"
 else
-    fail "O5 the debug log never shows plugin:rine:rine connecting (npx needs network the first time)"
+    fail "O5 the debug log never shows plugin:rine:rine connecting (npx resolves the pinned rine-mcp from the tree seeded by rig/seed-tree-mcp.sh)"
 fi
 
 # --- O3: no manifest error ----------------------------------------------------------------

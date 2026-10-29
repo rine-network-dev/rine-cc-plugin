@@ -15,7 +15,7 @@ test('test_session_headless_startsNoStreamAndRunsNoProcess', async ($, on) => {
 
 test('test_session_unregistered_probesTheVersionOnlyAndStartsNoStream', async ($, on) => {
   const world = newWorld(on)
-  world.files.delete('/cfg/credentials.json')
+  world.files.delete('/cfg/profiles.json')
   await begin($, world)
   await until(world, () => world.state.get('mode') === 'unregistered', 'the unregistered mode')
   expect(world.spawns).toEqual([])

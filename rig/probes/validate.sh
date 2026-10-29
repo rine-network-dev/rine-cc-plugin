@@ -58,14 +58,14 @@ assert_readmes_name V1 "${EXPECT_CC} or newer" "the Claude Code version floor ${
 
 # --- V2 -------------------------------------------------------------------------------
 if ! command -v rine >/dev/null 2>&1; then
-    fail "V2 rine CLI absent — the plugin would take its mcp-only branch for every probe"
+    fail "V2 rine CLI absent — the plugin would take its mcp-only branch for every probe; seed-tree-mcp.sh puts this tree's CLI on PATH, and run.sh runs it first"
 else
     CLI_VER="$(rine --version 2>&1 | tr -d '[:space:]')"
     info "rine --version → ${CLI_VER}"
     if [ "$CLI_VER" = "$EXPECT_CLI" ]; then
         pass "V2 rine CLI pinned at ${EXPECT_CLI}"
     else
-        fail "V2 rine CLI is '${CLI_VER}', expected ${EXPECT_CLI} — ${STALE_IMAGE}"
+        fail "V2 rine CLI is '${CLI_VER}', expected ${EXPECT_CLI} — the image carries no CLI; seed-tree-mcp.sh installs this tree's rine-cli, so re-run it (a standalone validate.sh run needs the seed first) or move the RINE_CLI_VERSION pin in rig/Dockerfile to the CLI's version"
     fi
 fi
 

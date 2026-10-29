@@ -1,14 +1,18 @@
 import { read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import { registerRine, RINE_COMMAND } from './commands/rine'
-import { guardFailed, GUARDED_FILE_TOOLS, GUARDED_SHELL_TOOL } from './lib/guard'
+import { guardFailed, GUARDED_FILE_TOOLS, GUARDED_READ_TOOLS, GUARDED_SHELL_TOOLS } from './lib/guard'
 import type { Backend } from './lib/ports'
+import { createPreviewTexts } from './lib/preview'
 import { TOOL_PATTERN } from './lib/refs'
+import { createOrg, registerOrg } from './register-org'
 import type { Host, Published, Recalled } from './runtime/host'
 import { createRuntime, type Runtime } from './runtime/runtime'
 import { delegateUi } from './runtime/ui-env'
 import { registerBand } from './ui/band'
+import { nextOrgRev } from './ui/org-tab'
 import { registerPane } from './ui/pane'
+import type { RineOrgStatus } from '../types/index'
 import { registerToolCards } from './ui/tool-cards'
 
 const modeRef = { plugin: 'rine', key: 'mode' } as const
@@ -28,8 +32,13 @@ const permissionRef = { plugin: 'rine', key: 'permissionMode' } as const
 const sinceRef = { plugin: 'rine', key: 'mirrorSince' } as const
 const nonceRef = { plugin: 'rine', key: 'leaseNonce' } as const
 const previewRef = { plugin: 'rine', key: 'preview' } as const
+const orgStatusRef = { plugin: 'rine', key: 'orgStatus' } as const
+const orgRevRef = { plugin: 'rine', key: 'orgRev' } as const
 
-const GUARDED = new RegExp(`^(${[...GUARDED_FILE_TOOLS, GUARDED_SHELL_TOOL].join('|')})$`)
+/** Decrypted preview text lives here, never in `$.state`; the band and the pane draw it through `previews.of`. */
+const previews = createPreviewTexts()
+
+const GUARDED = new RegExp(`^(${[...GUARDED_FILE_TOOLS, ...GUARDED_READ_TOOLS, ...GUARDED_SHELL_TOOLS].join('|')})$`)
 
 /** `messageCount` reads the API form, the one a `turn.step`'s `messageCount` counts; the row form can run ahead of it. */
 export function backendFor($: EngineInterface): Backend {
@@ -93,12 +102,18 @@ async function recallState($: EngineInterface): Promise<Recalled> {
 function hostFor($: EngineInterface): Host {
   return {
     backend: backendFor($),
-    env: (name) =>
-      name === 'rineConfigDir' ? $.env.get('RINE_CONFIG_DIR') : name === 'home' ? $.env.get('HOME') : $.env.get('CLAUDE_CONFIG_DIR'),
+    // `$.env.get` takes a literal name so the engine can list the variables a module reads.
+    env: (name) => {
+      if (name === 'rineConfigDir') return $.env.get('RINE_CONFIG_DIR')
+      if (name === 'home') return $.env.get('HOME')
+      if (name === 'ownerDir') return $.env.get('RINE_OWNER_DIR')
+      return $.env.get('CLAUDE_CONFIG_DIR')
+    },
     publish: (patch) => publishState($, patch),
     recall: () => recallState($),
-    setPreview: async (id, preview) => {
-      await update($, { ...previewRef, id }, () => preview)
+    setPreview: async (id, { text, ...flags }) => {
+      previews.keep(id, text)
+      await update($, { ...previewRef, id }, () => flags)
     },
     realPath: async (path) => (await $.fs.stat(path, { resolve: true }).catch(() => undefined))?.realPath,
     loadDigests: async (key) => {
@@ -124,15 +139,28 @@ function hostFor($: EngineInterface): Host {
   }
 }
 
-let runtime: Runtime | null = null
+/** Shows a status on the org tab: the status first, then the redraw counter the tab reads. */
+export const orgDrawOf = ($: EngineInterface) => (status: RineOrgStatus) =>
+  Promise.all([update($, orgStatusRef, () => status), update($, orgRevRef, nextOrgRev)])
 
-/** The module's one runtime, built by whichever event fires first. */
-const runtimeOf = ($: EngineInterface): Runtime => (runtime ??= createRuntime(hostFor($)))
+let runtime: Runtime | null = null
+const org = createOrg()
+
+/** The module's one runtime, built by whichever event fires first; the org tab takes the engine from it too. */
+const runtimeOf = ($: EngineInterface): Runtime => {
+  org.bind(() => ({
+    host: hostFor($),
+    ack: { load: (key) => $.store.get(key), save: (key, value) => $.store.set(key, value) },
+    draw: orgDrawOf($)
+  }))
+  return (runtime ??= createRuntime(hostFor($)))
+}
 
 export const register: Register = (on) => {
   const ui = delegateUi(() => runtime?.ui ?? null)
-  registerBand(on, ui)
-  registerPane(on, ui)
+  registerBand(on, ui, previews.of)
+  registerPane(on, ui, org.env, previews.of)
+  registerOrg(on, org)
   registerToolCards(on)
   registerRine(on, ui)
 
@@ -142,6 +170,7 @@ export const register: Register = (on) => {
     return next(e)
   })
   on('session.end', async (_$, e, next) => {
+    org.end(e.reason)
     await runtime?.end(e.reason).catch(() => undefined)
     return next(e)
   })

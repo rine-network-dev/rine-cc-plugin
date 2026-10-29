@@ -3,7 +3,7 @@ import { statePath } from './refs'
 import { isSet, nonEmpty } from './narrow'
 import type { RineIdentity, RineMode } from '../../types/index'
 
-export const RINE_CLI_TESTED_FLOOR = '0.20.0'
+export const RINE_CLI_TESTED_FLOOR = '0.22.0'
 
 export type ModeEnv = {
   rineConfigDir: string | undefined
@@ -18,14 +18,19 @@ export type PromptEvent = { permission_mode?: string; agent_id?: string }
 
 const VERSION = /^\d+\.\d+\.\d+$/
 
+/** The file that marks a config dir as onboarded: it holds the principal's profile and no secret. */
+const PROFILES_FILE = 'profiles.json'
+
+const hasProfiles = (ports: Pick<Ports, 'fs'>, dir: string): Promise<boolean> => ports.fs.exists(`${dir}/${PROFILES_FILE}`)
+
 export async function resolveRineDir(ports: Pick<Ports, 'fs'>, env: ModeEnv): Promise<string> {
   const explicit = env.rineConfigDir
   if (isSet(explicit)) return explicit
   const home = env.home
-  if (isSet(home) && (await ports.fs.exists(`${home}/.config/rine/credentials.json`))) {
+  if (isSet(home) && (await hasProfiles(ports, `${home}/.config/rine`))) {
     return `${home}/.config/rine`
   }
-  if (await ports.fs.exists(`${env.cwd}/.rine/credentials.json`)) return `${env.cwd}/.rine`
+  if (await hasProfiles(ports, `${env.cwd}/.rine`)) return `${env.cwd}/.rine`
   return isSet(home) ? `${home}/.config/rine` : `${env.cwd}/.rine`
 }
 
@@ -69,8 +74,8 @@ export async function detectMode(ports: Ports, env: ModeEnv): Promise<Detected> 
   if (!env.isInteractive) {
     const dir = await resolveRineDir(ports, env)
     return {
-      // No credentials: the unregistered guidance, never "connected". Still no run and no write.
-      mode: (await ports.fs.exists(`${dir}/credentials.json`)) ? 'headless' : 'unregistered',
+      // No profile: the unregistered guidance, never "connected". Still no run and no write.
+      mode: (await hasProfiles(ports, dir)) ? 'headless' : 'unregistered',
       identity: {
         handle: null,
         agentId: null,
@@ -106,7 +111,7 @@ export async function detectMode(ports: Ports, env: ModeEnv): Promise<Detected> 
     }
   }
   const isBelow = isBelowFloor(cliVersion)
-  if (!(await ports.fs.exists(`${dir}/credentials.json`))) {
+  if (!(await hasProfiles(ports, dir))) {
     return {
       mode: 'unregistered',
       identity: { handle: null, agentId: null, configDir: dir, cliVersion, isBelowFloor: isBelow, isStateWritable }

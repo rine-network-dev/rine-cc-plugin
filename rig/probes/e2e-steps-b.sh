@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# e2e-steps-b.sh — steps 6..10 of the interactive e2e (rig/e2e-interactive.sh). Sourced by the
+# e2e-steps-b.sh — steps 6..10 and 13 of the interactive e2e (rig/e2e-interactive.sh). Sourced by the
 # driver after probes/lib.sh and probes/e2e-lib.sh; it defines functions and nothing else (no
 # top-level commands, no `set` options). The driver sets the globals these steps read (BOB,
 # OUTD, HOST_API, RIG_API, CNAME, API_CNAME, ALICE, ...) before any of them runs, so shellcheck
@@ -11,12 +11,18 @@ readonly HAND='rine hand-off: the user selected'
 readonly STALE='rine ⚠ no signal for'
 readonly BACKOFF='rine ◌ reconnecting in'
 readonly HELD='Held for review'
-readonly PANE_ROW='\[ \] bob@'
+readonly PANE_ROW='● bob@'
 readonly BTN_HAND='\[ Hand to Claude \]'
 readonly BTN_REPLY='\[ Reply \]'
 readonly REPLY='Reply to .*Enter sends'
 readonly KEYS_HINT='click here or ctrl\+x tab to use the keys'
 readonly BYPASS='not woken: permissions bypassed'
+readonly BTN_ORG='\[ Whole org \]' BTN_SHOW='\[ Show \]' ORG_ACK='You see this once on this machine'
+readonly ORG_NEEDS_KEY='This view reads the messages of every agent' ORG_LIVE='[●◉○] live · 6 loaded'
+# A list row names the sender after its joint: bare in its own org, else keeping its whole name and its `@` with the
+# domain clipped (`mx-cli@…`), beside a long group label (hooks/lib/org-rows.ts partiesText, via fitGroupSender: a short
+# party keeps its name, the group takes the rest and clips its domain first).
+readonly ORG_ROW='(mx-cli(@[^ ]*)? → |(→|·) mx-cli(@| |$))' ORG_DIR=/work/scratch/e2e/org
 
 # --- step 6: preview mode holds the message; band, pane, hand-off; digits do nothing ---
 step6() {
@@ -32,7 +38,7 @@ step6() {
     if ! wait_screen "$HELD" 15; then fail "the pane never showed 'Held for review'"; return; fi
     pass "pane opens with the held row"
     sleep 2  # a click in the first moments after the pane draws is not taken
-    if ! click_pos "$PANE_ROW"; then fail "no held pane row matching '[ ] bob@'"; return; fi
+    if ! click_pos "$PANE_ROW"; then fail "no held pane row matching '● bob@'"; return; fi
     sleep 1
     # The band's `o` cannot give the pane the keyboard: the pane says so, and a click on its text grants it.
     if wait_screen "$KEYS_HINT" 5; then pass "a pane opened from the band's o shows the keys hint"; else fail "the pane opened from the band's o showed no keys hint"; fi
@@ -56,13 +62,13 @@ step6() {
 
 # --- step 7: the reply pane sends (y, Enter) ------------------------------------------
 step7() {
-    docker exec -d -e RINE_CONFIG_DIR=/work/creds-b -e RINE_API_URL="$RIG_API" "$CNAME" \
+    docker exec -d -e RINE_CONFIG_DIR=/work/creds-b -e "RINE_OWNER_DIR=$BOB_OWNER_DIR" -e RINE_API_URL="$RIG_API" "$CNAME" \
         sh -c "rine --json stream --persistent > $OUTD/bob-stream.log 2>&1"
     sleep 4
     tm_cmd "/rine"
-    if ! wait_screen "$PANE_ROW" 15; then fail "the pane never showed a '[ ] bob@' row"; return; fi
+    if ! wait_screen "$PANE_ROW" 15; then fail "the pane never showed a '● bob@' row"; return; fi
     sleep 2  # a click in the first moments after the pane draws is not taken
-    if ! click_pos "$PANE_ROW"; then fail "no pane row matching '[ ] bob@'"; return; fi
+    if ! click_pos "$PANE_ROW"; then fail "no pane row matching '● bob@'"; return; fi
     sleep 1
     tm_type y
     if ! wait_screen "$REPLY" 8; then
@@ -149,4 +155,51 @@ step10() {
     sleep 30
     if [ "$(jsonl_count "$RE_WAKE")" -eq "$w" ]; then pass "no wake under bypassPermissions"; else fail "a wake started under bypassPermissions ($w -> $(jsonl_count "$RE_WAKE"))"; fi
     if wait_screen "$BYPASS" 5 || wait_debug "$BYPASS" 5; then pass "the bypassPermissions note is present"; else info "soft check: no 'not woken: permissions bypassed' note on the screen or in the debug log"; fi
+}
+
+# --- step 13: the org tab: the one-time acknowledgement, no org key, a row from a recorded org ---
+org_feeds() { cx sh -c 'pgrep -fc "[t]ui --feed" || true'; }
+
+# org_server — a recorded org (the tui fixtures) on the container's loopback, and a `rine` ahead of the
+# shim that points only `rine tui` at it: the plugin and its stream keep the local stack.
+org_server() {
+    local fx=rine-core/test/fixtures/org-reader-parity/org-reader n=0
+    org_server_stop
+    cx sh -c "rm -f $ORG_DIR/url; mkdir -p $ORG_DIR/scripts/tui-e2e $ORG_DIR/$fx $ORG_DIR/bin $ORG_DIR/none" \
+        && docker cp "$ROOT/scripts/tui-e2e/fake_server.py" "$CNAME:$ORG_DIR/scripts/tui-e2e/" \
+        && docker cp "$ROOT/scripts/tui-e2e/serve.py" "$CNAME:$ORG_DIR/scripts/tui-e2e/" \
+        && docker cp "$ROOT/$fx/read-1.json" "$CNAME:$ORG_DIR/$fx/" \
+        && docker cp "$ROOT/rine-cc-plugin/rig/probes/fixtures/org-rine-shim.sh" "$CNAME:$ORG_DIR/bin/rine" || return 1
+    docker exec -d "$CNAME" python3 "$ORG_DIR/scripts/tui-e2e/serve.py" org-reader/read-1 "$ORG_DIR/owner" "$ORG_DIR/url"
+    until cx test -s "$ORG_DIR/url"; do n=$((n + 1)); [ "$n" -lt 15 ] || return 1; sleep 1; done
+}
+
+org_server_stop() { cx pkill -f "[s]cripts/tui-e2e/serve.py" || true; }
+
+# org_session OWNER_DIR — a fresh REPL with that owner dir, whose `rine tui` reads the recorded org.
+org_session() {
+    session_stop e3; sleep 3
+    SESSION_ENV="RINE_OWNER_DIR=$1 RINE_ORG_URL_FILE=$ORG_DIR/url RINE_REAL_RINE=$SHIM/rine PATH=$ORG_DIR/bin:$SHIM:\$PATH"
+    session_start e3 && wait_screen "$RE_STATUS_LIVE" 60 || return 1
+    tm_cmd "/rine"
+    wait_screen "$BTN_ORG" 20 && sleep 2 && click_pos "$BTN_ORG"
+}
+
+step13() {
+    session_stop e2e2
+    org_server || { fail "the recorded org could not be served in the rig"; return; }
+    org_session "$ORG_DIR/none" || { fail "no 'Whole org' button to press"; return; }
+    if wait_screen "$ORG_ACK" 15 && [ "$(org_feeds)" -eq 0 ]; then pass "the first open shows the acknowledgement and starts no feed"; else fail "no acknowledgement, or a feed already running: $(last_screen_tail)"; return; fi
+    # A click in the first moment after the acknowledgement is drawn reaches no button (no ui.press is
+    # dispatched), so it waits as a person reading it would, like the Whole org click in org_session.
+    sleep 2
+    click_pos "$BTN_SHOW" || { fail "no '[ Show ]' button on the acknowledgement"; return; }
+    if wait_screen "$ORG_NEEDS_KEY" 30; then pass "an agent key alone gets the needs-the-org-key sentence"; else fail "no needs-the-org-key sentence within 30 s: $(last_screen_tail)"; return; fi
+    sleep 15
+    if [ "$(org_feeds)" -eq 0 ]; then pass "no feed restarts after exit 3"; else fail "the plugin restarted the feed after exit 3"; fi
+    org_session "$ORG_DIR/owner" || { fail "no 'Whole org' button to press with the org key"; return; }
+    if wait_screen "$ORG_LIVE" 60 && printf '%s\n' "$LAST_SCREEN" | grep -Eq "$ORG_ROW"; then pass "with the org key the tab goes live and lists the recorded org's rows"; else fail "no live org tab with a recorded row within 60 s: $(last_screen_tail)"; fi
+    if printf '%s\n' "$LAST_SCREEN" | grep -q "$ORG_ACK"; then fail "the acknowledgement was shown again after it was kept"; else pass "the kept acknowledgement is not asked for again"; fi
+    session_stop e3
+    org_server_stop
 }

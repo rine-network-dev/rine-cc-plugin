@@ -1,6 +1,7 @@
 import type { RineIdentity, RineMode, RineStream } from '../../types/index'
 import { RINE_CLI_TESTED_FLOOR } from './mode'
 import { safeLine } from './sanitize'
+import { shownHandle } from './shown-handle'
 
 export type StatusInput = {
   isDetecting: boolean
@@ -29,7 +30,7 @@ export function formatDuration(ms: number): string {
 }
 
 function handleOf(identity: RineIdentity): string {
-  return identity.handle === null ? 'unknown' : safeLine(identity.handle, 32)
+  return identity.handle === null ? 'unknown' : shownHandle(identity.handle, null, 32)
 }
 
 function suffixes(input: StatusInput, isLive: boolean): string {

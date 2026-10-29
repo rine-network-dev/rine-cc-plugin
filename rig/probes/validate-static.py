@@ -87,7 +87,7 @@ def check_static(src, plugin):
 def check_events():
     # V8 — `plugin validate --json` reports the hook events the mod registers in contents[].notes[].
     events = ("session.start session.end prompt.compose turn.start turn.step turn.complete "
-              "tool.call command.run ui.render classic.UserPromptSubmit").split()
+              "tool.call command.run ui.render prompt.submit classic.UserPromptSubmit").split()
 
     def strings(o):
         if isinstance(o, str): yield o

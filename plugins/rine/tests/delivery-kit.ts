@@ -1,4 +1,5 @@
-import type { RineEntry, RinePreview } from '../types/index'
+import type { RineEntry } from '../types/index'
+import type { ReadPreview } from '../hooks/lib/preview'
 import { createDelivery, type Delivery } from '../hooks/lib/delivery'
 import type { DeliveryStore, DeliveryView } from '../hooks/lib/delivery-core'
 import type { StreamMessage } from '../hooks/lib/frames'
@@ -13,7 +14,7 @@ export const READ_OK = JSON.stringify({ verification_status: 'verified', from_ag
 export type Rig = {
   kit: Kit
   view: DeliveryView
-  previews: Map<string, RinePreview>
+  previews: Map<string, ReadPreview>
   pinned: Sender[]
   woke: number[]
   changes: { count: number }
@@ -48,7 +49,7 @@ export function message(over: Partial<StreamMessage> = {}): StreamMessage {
     type: 'rine.v1.dm',
     direction: 'received',
     conversationId: null,
-    encryption: 'hpke-v1',
+    encryption: 'hpke-hybrid-v2',
     createdAt: '2026-10-02T10:00:00Z',
     groupId: null,
     groupHandle: null,
@@ -61,7 +62,7 @@ export const ALLOW_BOB = { allow: [{ kind: 'agent' as const, handle: 'bob@acme.r
 export function createRig(over: Partial<DeliveryView> = {}): Rig {
   const kit = createKit()
   kit.setRun(() => ({ exitCode: 0, stdout: READ_OK, stderr: '' }))
-  const rig = { kit, view: makeView(over), previews: new Map<string, RinePreview>(), pinned: [] as Sender[], woke: [] as number[] } as Rig
+  const rig = { kit, view: makeView(over), previews: new Map<string, ReadPreview>(), pinned: [] as Sender[], woke: [] as number[] } as Rig
   rig.changes = { count: 0 }
   rig.carried = new Set()
   rig.logs = []

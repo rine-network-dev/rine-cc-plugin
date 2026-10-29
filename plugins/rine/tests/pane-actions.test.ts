@@ -11,7 +11,7 @@ type Rig = { env: UiEnv; calls: string[]; prefs: RinePrefs; lists: RineLists }
 function rig(over: Partial<UiEnv> = {}, handResult: HandOffResult = { status: 'submitted' }): Rig {
   const state: Rig = {
     calls: [],
-    prefs: { mutedUntil: null, isMuteExplicit: false, isPreview: false },
+    prefs: { mutedUntil: null, isMuteExplicit: false, isPreview: false, isMotion: true },
     lists: { allow: [], deny: [] },
     env: {} as UiEnv
   }
@@ -74,7 +74,7 @@ test('test_mute_eachSpec_writesItsDeadlineAndMarksTheChoiceExplicit', async () =
   const r = rig()
   const actions = createActions(r.env)
   expect(await actions.mute('1h')).toBe('muted for 1h')
-  expect(r.prefs).toEqual({ mutedUntil: NOW + 3_600_000, isMuteExplicit: true, isPreview: false })
+  expect(r.prefs).toEqual({ mutedUntil: NOW + 3_600_000, isMuteExplicit: true, isPreview: false, isMotion: true })
   expect(await actions.mute('forever')).toBe('muted until you unmute')
   expect(r.prefs.mutedUntil).toBe('forever')
   await actions.mute('off-hours')
@@ -83,9 +83,9 @@ test('test_mute_eachSpec_writesItsDeadlineAndMarksTheChoiceExplicit', async () =
 
 test('test_unmute_withLegacyPauseFile_saysItIsIgnored', async () => {
   const r = rig({ hasLegacyPause: async () => true })
-  r.prefs = { mutedUntil: 'forever', isMuteExplicit: true, isPreview: false }
+  r.prefs = { mutedUntil: 'forever', isMuteExplicit: true, isPreview: false, isMotion: true }
   expect(await createActions(r.env).unmute()).toBe('unmuted; the old monitor-pause file is now ignored (you can delete it)')
-  expect(r.prefs).toEqual({ mutedUntil: null, isMuteExplicit: true, isPreview: false })
+  expect(r.prefs).toEqual({ mutedUntil: null, isMuteExplicit: true, isPreview: false, isMotion: true })
 })
 
 test('test_setPreview_off_countsTheEntriesThatStayHeld', async () => {
@@ -94,6 +94,15 @@ test('test_setPreview_off_countsTheEntriesThatStayHeld', async () => {
   expect(await actions.setPreview(true, 0)).toBe('preview on: new messages wait for your review')
   expect(await actions.setPreview(false, 3)).toBe('preview off: 3 held stay held, /rine to hand them over')
   expect(r.prefs.isPreview).toBe(false)
+})
+
+test('test_setMotion_togglesThePref', async () => {
+  const r = rig()
+  const actions = createActions(r.env)
+  expect(await actions.setMotion(false)).toBe('motion off: the terminal stays still')
+  expect(r.prefs.isMotion).toBe(false)
+  expect(await actions.setMotion(true)).toBe('motion on')
+  expect(r.prefs.isMotion).toBe(true)
 })
 
 test('test_stateWriteFailure_isReportedNotSwallowed', async () => {

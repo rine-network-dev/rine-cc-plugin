@@ -1,4 +1,5 @@
 import type { RineMode } from '../../types/index'
+import { RINE_CLI_TESTED_FLOOR } from './mode'
 import { modelType, quoteField, safeLine } from './sanitize'
 
 export const SUMMARY_MAX = 20
@@ -159,7 +160,7 @@ function variantLine(ctx: ComposeContext): string {
 
 function floorNote(ctx: ComposeContext): string {
   if (!ctx.isBelowFloor) return ''
-  return ` The installed rine CLI is ${ctx.cliVersion ?? 'unknown'}; this plugin is tested against 0.20.0 or newer, so some skills may fail. Upgrade with: npm i -g @rine-network/cli`
+  return ` The installed rine CLI is ${ctx.cliVersion ?? 'unknown'}; this plugin needs ${RINE_CLI_TESTED_FLOOR} or newer, because an older CLI cannot sign in to the current server. Upgrade with: npm i -g @rine-network/cli`
 }
 
 export function composeSection(ctx: ComposeContext): string {

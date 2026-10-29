@@ -69,7 +69,8 @@ export function createRuntime(host: Host): Runtime {
       const env = { rineConfigDir: await host.env('rineConfigDir'), home, cwd: await host.cwd(), isInteractive: true }
       const live = await resolveRineDir(ports, env)
       const rineDirs = [...new Set([live, mem.get().identity.configDir].filter((dir) => dir !== ''))]
-      return checkToolCall(host.realPath, { rineDirs, claudeConfigDir: await host.env('claudeConfigDir'), home }, input)
+      const [claudeConfigDir, ownerDir] = [await host.env('claudeConfigDir'), await host.env('ownerDir')]
+      return checkToolCall(host.realPath, { rineDirs, claudeConfigDir, home, ownerDir }, input)
     },
     readMarked: async (tool, input) => {
       const id = readToolTarget(tool, input)

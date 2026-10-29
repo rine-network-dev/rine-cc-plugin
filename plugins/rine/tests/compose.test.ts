@@ -87,7 +87,7 @@ test('test_compose_headless_saysMessagesAreNotAnnounced', async ($, on) => {
 
 test('test_compose_unregistered_pointsAtSetup', async ($, on) => {
   const world = newWorld(on)
-  world.files.delete('/cfg/credentials.json')
+  world.files.delete('/cfg/profiles.json')
   await begin($, world)
   const found = await sectionWhenReady($, world)
   expect(found.text.startsWith('# rine\nRine CLI is installed but no identity is registered on this machine.')).toBe(true)

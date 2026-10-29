@@ -17,14 +17,14 @@ test('test_stream_message_toastsAndShowsInStatusAndBandOnBothSurfaces', async ($
   await until(world, () => world.toasts.length > 0, 'the arrival toast')
   expect(world.toasts).toEqual(['bob@acme.rine.network → you · dm'])
   await world.clock.advance(5000)
-  expect(world.statuses[world.statuses.length - 1]).toBe('rine ● alice@acme.rine.network · 1 unread')
+  expect(world.statuses[world.statuses.length - 1]).toBe('rine ● alice@acme · 1 unread')
   const entries = entriesOf(world)
   expect(entries).toHaveLength(1)
   expect(entries?.[0]?.state).toBe('unread')
   expect(entries?.[0]?.from).toBe(BOB)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'rine', surface, component: 'AbovePrompt', props: BAND_PROPS as never })
-    expect((await ui.find({ key: 'head' }))?.text).toContain('rine: 1 new — bob@acme.rine.network (dm)')
+    expect((await ui.find({ key: 'head' }))?.text).toContain('◆ rine  1 new — bob (dm)')
     await ui.unmount()
   }
 })
@@ -97,11 +97,19 @@ test('test_stream_outboundMessage_isDropped', async ($, on) => {
   expect(entriesOf(world) ?? []).toHaveLength(0)
 })
 
-test('test_stream_rejectedSessionAppend_isCaughtAndLogged', async ($, on) => {
+// Claude Code 2.1.293 and newer do not deliver the module's `$.ui.log` after that rejection, so the kit cannot see the
+// "append failed" line (ports-sink.test.ts holds it); what the kit can show is that the rejection is caught and the
+// stream goes on.
+test('test_stream_rejectedSessionAppend_isCaughtAndTheStreamGoesOn', async ($, on) => {
   const world = newWorld(on)
   await start($, world)
   await goLive(world)
   world.push(messageLine({ id: MSG_ID }))
-  await until(world, () => world.logs.includes('rine: append failed: HooksError'), 'the caught append failure')
-  expect(world.toasts).toEqual([`${BOB} → you · dm`])
+  await until(world, () => world.toasts.length > 0, 'the arrival toast')
+  world.push(messageLine({ id: 'aaaaaaaa-0002' }))
+  await until(world, () => entriesOf(world)?.length === 2, 'the second arrival')
+  // The second arrival lands inside the first toast's batch window: it is counted once there, neither lost nor shown twice.
+  await world.clock.advance(3000)
+  expect(world.toasts).toEqual([`${BOB} → you · dm`, 'rine: 1 more from 1 sender'])
+  expect(streamPhase(world)).toBe('live')
 })

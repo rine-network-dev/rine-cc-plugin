@@ -4,6 +4,7 @@ import type { ClockPort, Sink } from './ports'
 import { noticeText, shortType } from './model-text'
 import type { Downgrade } from './router'
 import { safeLine } from './sanitize'
+import { fittedHandle } from './shown-handle'
 
 export const BATCH_WINDOW_MS = 3000
 export const TOAST_CELLS = 80
@@ -11,8 +12,8 @@ export const TOAST_CELLS = 80
 export const SUFFIX = { held: 'held for review', waking: 'waking Claude', unverified: 'not verified, not woken' } as const
 
 export function arrivalToast(entry: RineEntry, suffix: string | null): string {
-  const from = safeLine(entry.from, 32)
-  const head = entry.group === null ? `${from} → you` : `${from} in ${safeLine(entry.group, 32)}`
+  const from = fittedHandle(entry.from, 32)
+  const head = entry.group === null ? `${from} → you` : `${from} in ${fittedHandle(entry.group, 32)}`
   const parts = [head, shortType(entry.type)]
   if (suffix !== null) parts.push(suffix)
   return safeLine(parts.join(' · '), TOAST_CELLS)

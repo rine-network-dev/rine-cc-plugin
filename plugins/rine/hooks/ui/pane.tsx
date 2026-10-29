@@ -1,12 +1,18 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { read, update } from 'claude-code'
-import type { RineEntry, RineLists, RinePreview } from '../../types/index'
-import { safeLine } from '../lib/sanitize'
+import type { RineEntry, RineLists } from '../../types/index'
+import { withText, type PreviewTextOf, type ReadPreview } from '../lib/preview'
+import { fittedHandle, ownSlugOf } from '../lib/shown-handle'
 import { DEFAULT_PREFS, isMuted } from '../lib/prefs'
 import type { ListName } from '../lib/lists'
-import { createActions, GROUP_WARNING, INBOX_PANE, listEntryOf, type UiEnv } from './pane-actions'
-import { detailTree, headerLine, listLines, registerReply } from './pane-detail'
-import { sectionsOf, sectionTree, snippetOf } from './pane-rows'
+import { lookOf } from './look'
+import { applyOrgKeys } from './org-keys-input'
+import { ORG_KEYS_KEY, ORG_STATUS_IDLE, nextOrgRev, openOrgTab, orgTab, type OrgTabEnv, type OrgTabHost } from './org-tab'
+import { createActions, INBOX_PANE, listEntryOf, type UiEnv } from './pane-actions'
+import { keysHint } from './pane-hints'
+import { inboxTree } from './pane-inbox'
+import { registerReply } from './pane-reply'
+import { sectionsOf, snippetOf } from './pane-rows'
 
 const entriesRef = { plugin: 'rine', key: 'entries' } as const
 const prefsRef = { plugin: 'rine', key: 'prefs' } as const
@@ -20,9 +26,18 @@ const warnRef = { plugin: 'rine', key: 'groupWarnId' } as const
 const focusRef = { plugin: 'rine', key: 'focusId' } as const
 const selectedRef = { plugin: 'rine', key: 'isSelected' } as const
 const previewRef = { plugin: 'rine', key: 'preview' } as const
+const orgTabRef = { plugin: 'rine', key: 'orgTab' } as const
+const orgStatusRef = { plugin: 'rine', key: 'orgStatus' } as const
+/** The org feed bumps this when module memory changes; reading it makes the drawing follow. */
+const orgRevRef = { plugin: 'rine', key: 'orgRev' } as const
 
-/** Shown while the pane lacks the keyboard: a pane letter then goes to the composer or to the band. */
-const KEYS_HINT = 'click here or ctrl+x tab to use the keys'
+/** The org tab's hands on `$.state` and the screen. */
+const orgHostOf = ($: EngineInterface): OrgTabHost => ({
+  setTab: (tab) => update($, orgTabRef, () => tab),
+  setStatus: (status) => update($, orgStatusRef, () => status),
+  redraw: () => update($, orgRevRef, nextOrgRev),
+  warn: (text) => $.ui.toast(text)
+})
 
 async function selectedOf($: EngineInterface, entries: readonly RineEntry[]): Promise<string[]> {
   const ids: string[] = []
@@ -42,15 +57,35 @@ async function deselect($: EngineInterface, ids: readonly string[]): Promise<voi
   for (const id of ids) await update($, { ...selectedRef, id }, () => false)
 }
 
-export const registerPane = (on: Parameters<Register>[0], env: UiEnv): void => {
+export const registerPane = (on: Parameters<Register>[0], env: UiEnv, org: OrgTabEnv, textOf: PreviewTextOf): void => {
   const actions = createActions(env)
   registerReply(on)
 
+  on('ui.message', async ($, e, next) => {
+    if (e.requestId !== INBOX_PANE.id || e.element !== ORG_KEYS_KEY) return next(e)
+    const status = (await read($, orgStatusRef)) ?? ORG_STATUS_IDLE
+    if ((await read($, orgTabRef)) === 'org' && status.phase !== 'ack') await applyOrgKeys(org, orgHostOf($), e.data)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: 'rine-inbox' }, async ($, e) => {
     const ui = $.ui.resolve(e)
-    const { Box, Text, Button } = ui
-    const entries = (await read($, entriesRef)) ?? []
+    const { Box, Text, Client } = ui
+    const host = orgHostOf($)
     const prefs = (await read($, prefsRef)) ?? DEFAULT_PREFS
+    const look = await lookOf({ now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn), redraw: () => $.ui.invalidate('ui.render') }, e.surface, prefs)
+    const columns = e.props.bodyColumns
+    if ((await read($, orgTabRef)) === 'org') {
+      await read($, orgRevRef)
+      const status = (await read($, orgStatusRef)) ?? ORG_STATUS_IDLE
+      return (
+        <Box flexDirection="column">
+          {keysHint(ui, e.props.isFocused, columns)}
+          {orgTab(ui, columns, status, org, host, <Client key={ORG_KEYS_KEY} module="./org-view.tsx" height={1} />, { ...look, isFocused: e.props.isFocused })}
+        </Box>
+      )
+    }
+    const entries = (await read($, entriesRef)) ?? []
     const stream = await read($, streamRef)
     const identity = await read($, identityRef)
     if (stream === undefined || identity === undefined) return <Text dimColor>rine is starting…</Text>
@@ -61,17 +96,17 @@ export const registerPane = (on: Parameters<Register>[0], env: UiEnv): void => {
     /** The entry whose `[g Allow]` is awaiting its second press; the warning shows meanwhile. */
     const pendingGroup = (await read($, warnRef)) ?? null
     const focus = (await read($, focusRef)) ?? null
-    const now = await $.clock.now()
-    const columns = e.props.bodyColumns
     const selected = new Set(await selectedOf($, entries))
-    const sections = sectionsOf(entries, now)
-    const previews = new Map<string, RinePreview | undefined>()
-    for (const entry of [...sections.held, ...(focus === null ? [] : entries.filter((one) => one.id === focus))]) {
-      previews.set(entry.id, await read($, { ...previewRef, id: entry.id }))
-    }
-    const snippets = new Map(sections.held.map((entry) => [entry.id, snippetOf(previews.get(entry.id))] as const))
+    const sections = sectionsOf(entries, look.now)
     const current = entries.find((entry) => entry.id === focus)
-    const warned = current !== undefined && pendingGroup === current.id
+    const previews = new Map<string, ReadPreview | undefined>()
+    const snippets = new Map<string, string>()
+    for (const entry of [...sections.held, ...(current === undefined ? [] : [current])]) {
+      const preview = withText(await read($, { ...previewRef, id: entry.id }), textOf(entry.id))
+      previews.set(entry.id, preview)
+      if (entry.disposition === 'held' || preview !== undefined) snippets.set(entry.id, snippetOf(preview))
+    }
+    const isWarned = current !== undefined && pendingGroup === current.id
     const say = (text: string | null): void => {
       if (text !== null) $.ui.toast(`rine: ${text}`)
     }
@@ -79,28 +114,9 @@ export const registerPane = (on: Parameters<Register>[0], env: UiEnv): void => {
       const targets = await targetsOf($)
       say(await job(targets))
     }
-    const onToggle = async (id: string): Promise<void> => {
-      await update($, { ...selectedRef, id }, (isOn) => isOn !== true)
-      await update($, focusRef, () => id)
-    }
     const decide = (name: ListName, kind: 'agent' | 'group') => press(async ([target]) => {
       const entry = target === undefined ? null : listEntryOf(target, kind)
       return entry === null ? 'that sender cannot be listed' : actions.addTo(name, entry)
-    })
-    const askGroup = press(async ([target]) => {
-      const entry = target === undefined ? null : listEntryOf(target, 'group')
-      if (entry === null || target === undefined) return 'that group cannot be listed'
-      if (pendingGroup !== target.id) {
-        await update($, warnRef, () => target.id)
-        await $.ui.invalidate('ui.render')
-        return null
-      }
-      await update($, warnRef, () => null)
-      return actions.addTo('allow', entry)
-    })
-    const readAll = press(async (targets) => {
-      for (const target of targets) await actions.read(target.id)
-      return null
     })
     const finish = (job: (ids: string[]) => Promise<string | null>) => press(async (targets) => {
       const ids = targets.map((target) => target.id)
@@ -108,59 +124,76 @@ export const registerPane = (on: Parameters<Register>[0], env: UiEnv): void => {
       await deselect($, ids)
       return text
     })
-    const handOver = finish(actions.hand)
-    const markAll = finish(actions.markRead)
-    const cancel = async (): Promise<void> => {
-      await update($, warnRef, () => null)
-      await $.ui.invalidate('ui.render')
-    }
-    const spec = { now, columns, selected, snippets, onToggle }
-    const phase = stream.phase
-    const isQuiet = isMuted(prefs, now, isLegacyPaused)
-    const isGroup = current?.group != null
-    const reply = press(async ([target]) => {
-      if (target === undefined || target.group !== null) return 'reply works on one-to-one messages'
-      await update($, focusRef, () => target.id)
-      await $.ui.close({ id: INBOX_PANE.id })
-      const opened = await $.ui.open({ id: 'rine-reply', title: `Reply to ${safeLine(target.from, 40)}`, focus: true, closeOnEscape: true })
-      if (opened.isPlaced) return null
-      await $.ui.open(INBOX_PANE)
-      return 'the reply pane did not open'
-    })
+    const isQuiet = isMuted(prefs, look.now, isLegacyPaused)
 
-    return (
-      <Box flexDirection="column">
-        <Text>{headerLine({ identity, phase, isPreview: prefs.isPreview, isMuted: isQuiet, isOwner }, columns)}</Text>
-        {!e.props.isFocused && <Text dimColor>{KEYS_HINT}</Text>}
-        {!isTrusted && !warned && (
-          <Box key="untrusted" flexDirection="row">
-            <Text>Lists changed outside /rine — review </Text>
-            <Button key="confirm" label="Confirm" hotkey="c" onPress={press(async () => actions.confirm())} />
-          </Box>
-        )}
-        {!isTrusted && !warned && listLines(lists, columns).map((text, at) => <Text key={`list-${at}`}>{text}</Text>)}
-        {sectionTree(ui, { ...spec, key: 'held', title: 'Held for review', entries: sections.held, isDim: false })}
-        {sectionTree(ui, { ...spec, key: 'unread', title: 'Unread', entries: sections.unread, isDim: false })}
-        {sectionTree(ui, { ...spec, key: 'earlier', title: 'Earlier, last 24h', entries: sections.earlier, isDim: false })}
-        {sectionTree(ui, { ...spec, key: 'filtered', title: 'Filtered', entries: sections.filtered, isDim: true })}
-        {current !== undefined && detailTree(ui, previews.get(current.id), columns)}
-        {warned && current?.group != null && <Text>{safeLine(GROUP_WARNING(current.group), columns)}</Text>}
-        <Box key="actions" flexDirection="row" flexWrap="wrap">
-          <Button key="read" label="Read" hotkey="r" onPress={readAll} />
-          <Button key="hand" label="Hand to Claude" hotkey="s" variant="primary" onPress={handOver} />
-          <Button key="mark" label="Mark read" hotkey="e" onPress={markAll} />
-          {current !== undefined && !isGroup && <Button key="reply" label="Reply" hotkey="y" onPress={reply} />}
-          {current !== undefined && !isGroup && <Button key="allow" label="Allow sender" hotkey="a" onPress={decide('allow', 'agent')} />}
-          {current !== undefined && !isGroup && <Button key="deny" label="Deny sender" hotkey="d" onPress={decide('deny', 'agent')} />}
-          {isGroup && <Button key="allow-group" label={warned ? 'Allow' : 'Allow group'} hotkey="g" onPress={askGroup} />}
-          {isGroup && !warned && <Button key="deny-group" label="Deny group" hotkey="k" onPress={decide('deny', 'group')} />}
-          {warned && <Button key="cancel" label="Cancel" hotkey="c" onPress={cancel} />}
-          <Button key="preview" label={prefs.isPreview ? 'Preview off' : 'Preview on'} hotkey="p" onPress={async () => say(await actions.setPreview(!prefs.isPreview, sections.held.length))} />
-          <Button key="mute" label={isQuiet ? 'Unmute' : 'Mute'} hotkey="q" onPress={async () => say(isQuiet ? await actions.unmute() : await actions.mute('1h'))} />
-          {(phase === 'backoff' || phase === 'offline' || phase === 'auth-failed') && <Button key="reconnect" label="Reconnect" hotkey="x" onPress={async () => say(await actions.reconnect())} />}
-          {!isOwner && <Button key="takeover" label="Take over" hotkey="t" onPress={async () => say(await actions.takeover())} />}
-        </Box>
-      </Box>
-    )
+    return inboxTree(ui, {
+      columns,
+      look,
+      isFocused: e.props.isFocused,
+      header: { identity, phase: stream.phase, isPreview: prefs.isPreview, isMuted: isQuiet, isOwner },
+      identity,
+      ownSlug: ownSlugOf(identity.handle),
+      lists,
+      sections,
+      selected,
+      snippets,
+      current,
+      preview: current === undefined ? undefined : previews.get(current.id),
+      onToggle: async (id) => {
+        await update($, { ...selectedRef, id }, (isOn) => isOn !== true)
+        await update($, focusRef, () => id)
+      },
+      buttons: {
+        hasFocus: current !== undefined,
+        isGroup: current?.group != null,
+        isWarned,
+        isTrusted,
+        isPreview: prefs.isPreview,
+        isQuiet,
+        isOwner,
+        phase: stream.phase,
+        jobs: {
+          read: press(async (targets) => {
+            for (const target of targets) await actions.read(target.id)
+            return null
+          }),
+          hand: finish(actions.hand),
+          mark: finish(actions.markRead),
+          reply: press(async ([target]) => {
+            if (target === undefined || target.group !== null) return 'reply works on one-to-one messages'
+            await update($, focusRef, () => target.id)
+            await $.ui.close({ id: INBOX_PANE.id })
+            const opened = await $.ui.open({ id: 'rine-reply', title: `Reply to ${fittedHandle(target.from, 40)}`, focus: true, closeOnEscape: true })
+            if (opened.isPlaced) return null
+            await $.ui.open(INBOX_PANE)
+            return 'the reply pane did not open'
+          }),
+          confirm: press(async () => actions.confirm()),
+          allowSender: decide('allow', 'agent'),
+          denySender: decide('deny', 'agent'),
+          allowGroup: press(async ([target]) => {
+            const entry = target === undefined ? null : listEntryOf(target, 'group')
+            if (entry === null || target === undefined) return 'that group cannot be listed'
+            if (pendingGroup !== target.id) {
+              await update($, warnRef, () => target.id)
+              await $.ui.invalidate('ui.render')
+              return null
+            }
+            await update($, warnRef, () => null)
+            return actions.addTo('allow', entry)
+          }),
+          denyGroup: decide('deny', 'group'),
+          cancel: async () => {
+            await update($, warnRef, () => null)
+            await $.ui.invalidate('ui.render')
+          },
+          preview: async () => say(await actions.setPreview(!prefs.isPreview, sections.held.length)),
+          mute: async () => say(isQuiet ? await actions.unmute() : await actions.mute('1h')),
+          reconnect: async () => say(await actions.reconnect()),
+          takeover: async () => say(await actions.takeover()),
+          org: () => openOrgTab(org, host)
+        }
+      }
+    })
   })
 }

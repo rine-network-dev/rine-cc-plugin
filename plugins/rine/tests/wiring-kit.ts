@@ -59,7 +59,7 @@ const recorder = (list: (string | undefined)[]) => async (_$: unknown, e: { text
 const slot = (e: { key: string; id?: string }): string => (e.id === undefined ? e.key : `${e.key}:${e.id}`)
 
 export function newWorld(on: On, options: WorldOptions = {}): World {
-  const files = new Map<string, string>(Object.entries({ [`${CFG}/credentials.json`]: '{}', ...options.files }))
+  const files = new Map<string, string>(Object.entries({ [`${CFG}/profiles.json`]: '{}', ...options.files }))
   const world: World = {
     files,
     state: new Map(Object.entries(options.state ?? {})),
@@ -91,7 +91,7 @@ export function newWorld(on: On, options: WorldOptions = {}): World {
     world.runs.push([...e.argv])
     if (options.isRunFailing) throw new Error('spawn rine ENOENT')
     const identity = JSON.stringify({ agent: OWN_HANDLE, agent_id: OWN_ID })
-    const out = e.argv.includes('--version') ? '0.20.0\n' : e.argv.includes('whoami') ? identity : e.argv.includes('read') ? world.readAnswer.value : ''
+    const out = e.argv.includes('--version') ? '0.22.0\n' : e.argv.includes('whoami') ? identity : e.argv.includes('read') ? world.readAnswer.value : ''
     return { value: { exitCode: out === null ? 1 : 0, stdout: out ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
   })
   const queue: { stream: 'stdout' | 'stderr'; text: string }[] = []

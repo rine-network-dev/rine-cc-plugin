@@ -4,7 +4,7 @@ import { isRecord } from './narrow'
 import type { Ports } from './ports'
 import { statePath } from './refs'
 
-export const DEFAULT_PREFS: RinePrefs = { mutedUntil: null, isMuteExplicit: false, isPreview: false }
+export const DEFAULT_PREFS: RinePrefs = { mutedUntil: null, isMuteExplicit: false, isPreview: false, isMotion: true }
 
 export type MuteSpec = '1h' | '8h' | 'off-hours' | 'forever'
 
@@ -18,7 +18,8 @@ function normalizePrefs(value: unknown): RinePrefs | null {
   return {
     mutedUntil: muted === 'forever' ? 'forever' : isTimed ? muted : null,
     isMuteExplicit: value.isMuteExplicit === true,
-    isPreview: value.isPreview === true
+    isPreview: value.isPreview === true,
+    isMotion: value.isMotion !== false
   }
 }
 
@@ -64,6 +65,10 @@ export function withMute(prefs: RinePrefs, mutedUntil: number | 'forever' | null
 
 export function withPreview(prefs: RinePrefs, isPreview: boolean): RinePrefs {
   return { ...prefs, isPreview }
+}
+
+export function withMotion(prefs: RinePrefs, isMotion: boolean): RinePrefs {
+  return { ...prefs, isMotion }
 }
 
 export function legacyPausePath(rineDir: string): string {

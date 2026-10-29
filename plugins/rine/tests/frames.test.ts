@@ -53,7 +53,7 @@ test('test_parseFrame_messageDataString_parsedTwice', () => {
     type: 'rine.v1.dm',
     direction: 'received',
     conversationId: 'c-1',
-    encryption: 'hpke-v1',
+    encryption: 'hpke-hybrid-v2',
     createdAt: '2026-10-02T10:00:00Z',
     groupId: null,
     groupHandle: null

@@ -40,16 +40,32 @@ export type RinePrefs = {
   mutedUntil: number | 'forever' | null
   isMuteExplicit: boolean
   isPreview: boolean
+  /** Cell animation on the terminal: pulse, spinner, shimmer, reveal and decode. `/rine motion off` stores false. */
+  isMotion: boolean
 }
 export type RineListEntry = { kind: 'agent' | 'group'; handle: string; agentId: string | null }
 export type RineLists = { allow: RineListEntry[]; deny: RineListEntry[] }
+/** What `$.state` keeps of a preview: flags and counts. The decrypted text stays in the plugin's module memory, because every installed plugin can read `$.state`. */
 export type RinePreview = {
   status: 'loading' | 'ok' | 'error'
-  text?: string
   isVerified?: boolean
   hiddenChars?: number
   truncatedChars?: number
 }
+export type RineOrgTab = 'inbox' | 'org'
+/** `ack`: the one-time acknowledgement is showing and no feed is running. */
+export type RineOrgPhase = 'idle' | 'ack' | 'starting' | 'live' | 'paused' | 'stopped'
+/** The feed's error codes, plus `cli_too_old` for a CLI that predates the feed. */
+export type RineOrgStopReason =
+  | 'needs_org_key'
+  | 'no_identity'
+  | 'auth_refused'
+  | 'rate_limited'
+  | 'network'
+  | 'server'
+  | 'malformed_page'
+  | 'cli_too_old'
+export type RineOrgStatus = { phase: RineOrgPhase; reason: RineOrgStopReason | null; loaded: number; gaps: number }
 declare module 'claude-code' {
   interface PluginState {
     rine: {
@@ -75,6 +91,11 @@ declare module 'claude-code' {
       isRawShown: StateFamily<boolean>
       replyDraft: StateFamily<string>
       focusId: string | null
+      /** Ids of the unread entries the person has seen announced: the band draws only for those not in it, and the prompt line carries the rest. */
+      foldedIds: string[]
+      orgTab: RineOrgTab
+      orgStatus: RineOrgStatus
+      orgRev: number
     }
   }
 }

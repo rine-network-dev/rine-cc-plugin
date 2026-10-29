@@ -8,10 +8,11 @@
 # --- the texts the steps assert (one regex per variable) ------------------------------
 readonly RE_STATUS_LIVE='rine ● alice'
 readonly RE_NOT_WOKEN='not woken until you type a prompt'
-readonly RE_BAND='rine: [0-9]+ new'
+readonly RE_BAND='◆ rine +[0-9]+ new — [^/]'
 readonly RE_NOTIFY='rine notification from the rine plugin, not the user'
 readonly RE_WAKE='rine wake: started by the rine plugin'
 readonly RE_TAMPERED='tampered'
+readonly RE_TAIL='◆ rine [0-9]+ new — /rine to open'
 
 # wait_lists HANDLE WANT SECS — poll lists.json until the handle's line count reaches WANT
 # (1 for "present", 0 for "absent"); 0 on success, 1 at the deadline.
@@ -69,6 +70,63 @@ step2() {
         fail "a wake started ($wakes) for a message sent before the first typed prompt"
     fi
 }
+# tail_count — the N of the line under the prompt on LAST_SCREEN, 0 when the line is not there.
+tail_count() {
+    local n
+    n="$(printf '%s\n' "$LAST_SCREEN" | grep -Eo "$RE_TAIL" | head -1 | grep -Eo '[0-9]+')"
+    printf '%s\n' "${n:-0}"
+}
+# fold_tail_check — a prompt submitted with no band key pressed folds the band into the line under the
+# prompt; marking the message read in the pane takes it off that line. Runs as the end of step 3, while
+# bob is off the allowlist, so the message is announced and not woken. The line counts every folded unread
+# entry and the band marks only what it shows: an earlier one the model did not read stays there, so the count must drop by exactly
+# one, and the line goes away when it was the last.
+fold_tail_check() {
+    local id deadline before
+    id="$(bob_send "step3-fold")"
+    if [ -z "$id" ]; then
+        fail "bob could not send step3-fold"
+        return
+    fi
+    if ! wait_screen "$RE_BAND" 20; then
+        fail "the band never showed the step3-fold message within 20 s"
+        return
+    fi
+    tm_cmd "Reply with the single word ok."
+    if wait_screen "$RE_TAIL" 15; then
+        pass "a submit with no band key folds the band into the line under the prompt"
+    else
+        fail "no '◆ rine N new — /rine to open' under the prompt within 15 s of the submit; last screen: $(last_screen_tail)"
+        return
+    fi
+    finish_turn
+    LAST_SCREEN="$(tm_screen)"
+    before="$(tail_count)"
+    tm_cmd "/rine"
+    if ! wait_screen "$PANE_ROW" 15; then
+        fail "the pane never showed a '● bob@' row to mark read"
+        return
+    fi
+    sleep 2  # a click in the first moments after the pane draws is not taken
+    click_pos "$PANE_ROW" || { fail "no pane row matching '● bob@'"; return; }
+    sleep 1
+    tm_type e
+    tm_key Escape
+    deadline=$(( $(date +%s) + 10 ))
+    while :; do
+        LAST_SCREEN="$(tm_screen)"
+        [ "$(tail_count)" -eq $(( before - 1 )) ] && break
+        [ "$(date +%s)" -lt "$deadline" ] || break
+        sleep 0.5
+    done
+    if [ "$(tail_count)" -ne $(( before - 1 )) ]; then
+        fail "the line under the prompt read $before new and $(tail_count) new 10 s after one message was marked read"
+    elif [ "$before" -eq 1 ]; then
+        pass "marking the message read takes the line under the prompt away"
+    else
+        pass "marking the message read drops the line under the prompt from $before new to $(( before - 1 ))"
+    fi
+}
 # --- step 3: a non-allowlisted message gives a notify row -----------------------------
 step3() {
     tm_cmd "Reply with the single word ok."
@@ -93,13 +151,19 @@ step3() {
     if wait_screen "$RE_BAND" 20; then
         pass "band shows the new message"
     else
-        fail "the band never showed 'rine: N new' within 20 s"
+        fail "the band never showed '◆ rine N new — names' within 20 s"
     fi
     if wait_jsonl "$RE_NOTIFY" 1 20 && [ "$(jsonl_count "$id")" -ge 1 ]; then
         pass "notify row with the message id is in the session transcript"
     else
         fail "no notify row carrying $id in the session transcript within 20 s"
     fi
+    # Focus the band while it is still above the prompt, then the letter hotkey `m` (Mark read) so it clears:
+    # the next prompt submit folds the band into the line under the prompt.
+    tm_key C-x
+    tm_key Tab
+    tm_type m
+    tm_key Escape
     tm_cmd "Which rine message id did you just get notified about? Answer with the id."
     finish_turn
     if wait_screen "${id:0:8}" 5; then
@@ -107,11 +171,7 @@ step3() {
     else
         info "soft check: the model's answer did not show the id"
     fi
-    # Focus the band, then the letter hotkey `m` (Mark read) so it clears.
-    tm_key C-x
-    tm_key Tab
-    tm_type m
-    tm_key Escape
+    fold_tail_check
 }
 # --- step 4: an allowlisted idle message wakes Claude ---------------------------------
 step4() {

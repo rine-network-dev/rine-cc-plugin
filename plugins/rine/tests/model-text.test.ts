@@ -19,7 +19,7 @@ function ctx(overrides: Partial<ComposeContext> = {}): ComposeContext {
     handle: 'bob@acme',
     isPreview: false,
     isMuted: false,
-    cliVersion: '0.20.0',
+    cliVersion: '0.22.0',
     isBelowFloor: false,
     ...overrides
   }

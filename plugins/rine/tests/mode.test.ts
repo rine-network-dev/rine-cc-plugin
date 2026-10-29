@@ -12,7 +12,7 @@ const interactive = { rineConfigDir: '/cfg', home: undefined, cwd: '/work', isIn
 
 test('test_detectMode_headless_makesNoRunAndNoWrite', async () => {
   const kit = createKit()
-  kit.fs.files.set('/cfg/credentials.json', '{}')
+  kit.fs.files.set('/cfg/profiles.json', '{}')
   const detected = await detectMode(kit.ports, { ...interactive, isInteractive: false })
   expect(detected.mode).toBe('headless')
   expect(kit.runs).toHaveLength(0)
@@ -38,24 +38,24 @@ test('test_detectMode_runRejects_isMcpOnly', async () => {
 
 test('test_detectMode_cliAndCredentials_isReadyWithIdentity', async () => {
   const kit = createKit()
-  kit.fs.files.set('/cfg/credentials.json', '{}')
+  kit.fs.files.set('/cfg/profiles.json', '{}')
   kit.setRun((argv) =>
     argv[1] === '--version'
-      ? { exitCode: 0, stdout: '0.20.0\n', stderr: '' }
+      ? { exitCode: 0, stdout: '0.22.0\n', stderr: '' }
       : { exitCode: 0, stdout: '{"agent":"alice@acme.rine.network","agent_id":"a-1"}', stderr: '' }
   )
   const detected = await detectMode(kit.ports, interactive)
   expect(detected.mode).toBe('ready')
   expect(detected.identity.handle).toBe('alice@acme.rine.network')
   expect(detected.identity.agentId).toBe('a-1')
-  expect(detected.identity.cliVersion).toBe('0.20.0')
+  expect(detected.identity.cliVersion).toBe('0.22.0')
   expect(detected.identity.isBelowFloor).toBe(false)
   expect(detected.identity.isStateWritable).toBe(true)
 })
 
 test('test_detectMode_cliWithoutCredentials_isUnregistered', async () => {
   const kit = createKit()
-  kit.setRun(() => ({ exitCode: 0, stdout: '0.20.0\n', stderr: '' }))
+  kit.setRun(() => ({ exitCode: 0, stdout: '0.22.0\n', stderr: '' }))
   const detected = await detectMode(kit.ports, interactive)
   expect(detected.mode).toBe('unregistered')
   expect(detected.identity.handle).toBeNull()
@@ -64,10 +64,10 @@ test('test_detectMode_cliWithoutCredentials_isUnregistered', async () => {
 
 test('test_detectMode_whoamiLoggedOut_keepsReadyWithNullAgentId', async () => {
   const kit = createKit()
-  kit.fs.files.set('/cfg/credentials.json', '{}')
+  kit.fs.files.set('/cfg/profiles.json', '{}')
   kit.setRun((argv) =>
     argv[1] === '--version'
-      ? { exitCode: 0, stdout: '0.20.0\n', stderr: '' }
+      ? { exitCode: 0, stdout: '0.22.0\n', stderr: '' }
       : { exitCode: 0, stdout: '{"logged_in":false}', stderr: '' }
   )
   const detected = await detectMode(kit.ports, interactive)
@@ -78,10 +78,10 @@ test('test_detectMode_whoamiLoggedOut_keepsReadyWithNullAgentId', async () => {
 
 test('test_detectMode_whoamiRejects_keepsReadyWithNullAgentId', async () => {
   const kit = createKit()
-  kit.fs.files.set('/cfg/credentials.json', '{}')
+  kit.fs.files.set('/cfg/profiles.json', '{}')
   kit.setRun((argv) =>
     argv[1] === '--version'
-      ? { exitCode: 0, stdout: '0.20.0\n', stderr: '' }
+      ? { exitCode: 0, stdout: '0.22.0\n', stderr: '' }
       : new Error('boom')
   )
   const detected = await detectMode(kit.ports, interactive)
@@ -92,14 +92,14 @@ test('test_detectMode_whoamiRejects_keepsReadyWithNullAgentId', async () => {
 test('test_detectMode_probeWriteFails_marksStateReadOnly', async () => {
   const kit = createKit()
   kit.fs.isWriteFailing = true
-  kit.setRun(() => ({ exitCode: 0, stdout: '0.20.0\n', stderr: '' }))
+  kit.setRun(() => ({ exitCode: 0, stdout: '0.22.0\n', stderr: '' }))
   const detected = await detectMode(kit.ports, interactive)
   expect(detected.identity.isStateWritable).toBe(false)
 })
 
 test('test_detectMode_passesResolvedDirInEveryRunEnv', async () => {
   const kit = createKit()
-  kit.fs.files.set('/cfg/credentials.json', '{}')
+  kit.fs.files.set('/cfg/profiles.json', '{}')
   const envs: (Record<string, string> | undefined)[] = []
   const inner = kit.ports.run
   kit.ports.run = async (argv, init) => {
@@ -108,7 +108,7 @@ test('test_detectMode_passesResolvedDirInEveryRunEnv', async () => {
   }
   kit.setRun((argv) =>
     argv[1] === '--version'
-      ? { exitCode: 0, stdout: '0.20.0\n', stderr: '' }
+      ? { exitCode: 0, stdout: '0.22.0\n', stderr: '' }
       : { exitCode: 0, stdout: '{"agent_id":"a-1"}', stderr: '' }
   )
   await detectMode(kit.ports, interactive)
@@ -125,22 +125,22 @@ test('test_resolveRineDir_envSetWithoutCreds_winsUnconditionally', async () => {
 
 test('test_resolveRineDir_envEmptyString_isIgnored', async () => {
   const kit = createKit()
-  kit.fs.files.set('/home/u/.config/rine/credentials.json', '{}')
+  kit.fs.files.set('/home/u/.config/rine/profiles.json', '{}')
   const dir = await resolveRineDir(kit.ports, { ...interactive, rineConfigDir: '', home: '/home/u' })
   expect(dir).toBe('/home/u/.config/rine')
 })
 
 test('test_resolveRineDir_homeConfigWithCreds_beatsCwd', async () => {
   const kit = createKit()
-  kit.fs.files.set('/home/u/.config/rine/credentials.json', '{}')
-  kit.fs.files.set('/work/.rine/credentials.json', '{}')
+  kit.fs.files.set('/home/u/.config/rine/profiles.json', '{}')
+  kit.fs.files.set('/work/.rine/profiles.json', '{}')
   const dir = await resolveRineDir(kit.ports, { ...interactive, rineConfigDir: undefined, home: '/home/u' })
   expect(dir).toBe('/home/u/.config/rine')
 })
 
 test('test_resolveRineDir_cwdRineWithCreds_whenHomeHasNone', async () => {
   const kit = createKit()
-  kit.fs.files.set('/work/.rine/credentials.json', '{}')
+  kit.fs.files.set('/work/.rine/profiles.json', '{}')
   const dir = await resolveRineDir(kit.ports, { ...interactive, rineConfigDir: undefined, home: '/home/u' })
   expect(dir).toBe('/work/.rine')
 })
@@ -152,7 +152,7 @@ test('test_resolveRineDir_noneHaveCreds_fallsBackToHomeConfig', async () => {
 })
 
 test('test_parseCliVersion', async () => {
-  expect(parseCliVersion('0.20.0\n')).toBe('0.20.0')
+  expect(parseCliVersion('0.22.0\n')).toBe('0.22.0')
   expect(parseCliVersion('0.21.0-rc.1')).toBe('0.21.0')
   expect(parseCliVersion('garbage')).toBeNull()
   expect(parseCliVersion('')).toBeNull()
@@ -161,9 +161,9 @@ test('test_parseCliVersion', async () => {
 
 test('test_isBelowFloor', async () => {
   expect(isBelowFloor('0.19.0')).toBe(true)
-  expect(isBelowFloor('0.19.99')).toBe(true)
-  expect(isBelowFloor('0.20.0')).toBe(false)
-  expect(isBelowFloor('0.20.1')).toBe(false)
+  expect(isBelowFloor('0.21.99')).toBe(true)
+  expect(isBelowFloor('0.22.0')).toBe(false)
+  expect(isBelowFloor('0.22.1')).toBe(false)
   expect(isBelowFloor('1.0.0')).toBe(false)
   expect(isBelowFloor('0.100.0')).toBe(false)
   expect(isBelowFloor(null)).toBe(false)

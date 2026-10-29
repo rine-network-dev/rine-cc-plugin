@@ -14,7 +14,7 @@ export function messageLine(over: Record<string, unknown> = {}): string {
     type: 'rine.v1.dm',
     direction: 'received',
     conversation_id: 'c-1',
-    encryption_version: 'hpke-v1',
+    encryption_version: 'hpke-hybrid-v2',
     created_at: '2026-10-02T10:00:00Z',
     group_id: null,
     group_handle: null,

@@ -1,6 +1,5 @@
 import { test, expect } from 'claude-code/testing'
-import { createReader, loadPreview, parseRead, PREVIEW_MAX_CHARS, previewOf, READ_CONCURRENCY, READ_TIMEOUT_MS, verificationOf } from '../hooks/lib/preview'
-import type { RinePreview } from '../types/index'
+import { createReader, loadPreview, parseRead, PREVIEW_MAX_CHARS, previewOf, READ_CONCURRENCY, READ_TIMEOUT_MS, verificationOf, type ReadPreview } from '../hooks/lib/preview'
 import { DIR } from './entry-kit'
 import { tick } from './tick'
 
@@ -9,7 +8,7 @@ const read = (over: Record<string, unknown>): string => JSON.stringify({ verific
 
 test('test_parseRead_object_payload_text_is_taken', () => {
   const outcome = parseRead(read({ decrypted_payload: { text: 'hi' } }))
-  expect(outcome).toEqual({ ok: true, message: { verificationStatus: 'verified', fromAgentId: 'a-1', text: 'hi', reason: null } })
+  expect(outcome).toEqual({ ok: true, message: { verificationStatus: 'verified', fromAgentId: 'a-1', text: 'hi', reason: null, cleartextNotice: null } })
 })
 
 test('test_parseRead_withheld_payload_keeps_the_decrypt_error', () => {
@@ -41,6 +40,19 @@ test('test_previewOf_long_text_is_cut_and_counted', () => {
 
 test('test_previewOf_unverified_message_is_marked', () => {
   expect(previewOf(parseRead(read({ verification_status: 'invalid', decrypted_payload: 'x' }))).isVerified).toBe(false)
+})
+
+test('test_previewOf_a2a_cleartext_leads_with_the_notice_and_is_not_verified', () => {
+  const notice = 'Received as A2A cleartext: this message was not end-to-end encrypted.'
+  const preview = previewOf(
+    parseRead(JSON.stringify({ from_agent_id: 'a-1', decrypted_payload: [{ text: 'hi' }], a2a_cleartext: true, a2a_cleartext_notice: notice }))
+  )
+  expect(preview).toMatchObject({ status: 'ok', isVerified: false })
+  expect(preview.text?.startsWith(`[${notice}] `)).toBe(true)
+})
+
+test('test_previewOf_sealed_message_carries_no_notice', () => {
+  expect(previewOf(parseRead(read({ decrypted_payload: 'hi', a2a_cleartext_notice: 'stray' }))).text).toBe('hi')
 })
 
 test('test_previewOf_withheld_payload_is_an_error_with_the_reason', () => {
@@ -119,7 +131,7 @@ test('test_reader_never_runs_more_than_the_concurrency_cap', async () => {
 })
 
 test('test_loadPreview_sets_loading_then_the_result', async () => {
-  const seen: RinePreview[] = []
+  const seen: ReadPreview[] = []
   const reader = createReader(async () => ({ exitCode: 0, stdout: read({ decrypted_payload: 'hi' }), stderr: '' }))
   const result = await loadPreview(reader, async (_id, preview) => void seen.push(preview), ID, DIR)
   expect(seen.map((p) => p.status)).toEqual(['loading', 'ok'])

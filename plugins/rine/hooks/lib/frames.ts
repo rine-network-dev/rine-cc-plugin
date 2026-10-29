@@ -91,11 +91,17 @@ export function isServerFrame(frame: Frame): boolean {
   return frame.kind === 'heartbeat' || frame.kind === 'message'
 }
 
-export type LineBuffer = { push: (chunk: string) => Generator<Frame, void> }
+export type LineBuffer<T = Frame> = { push: (chunk: string) => Generator<T, void> }
 
 const OVERSIZED: Frame = { kind: 'invalid', reason: 'oversized' }
 
-export function createLineBuffer(): LineBuffer {
+/** Splits chunks into lines and parses each; with no arguments it parses stream frames. A line over MAX_LINE_CHARS yields `oversized` and is dropped without being parsed. */
+export function createLineBuffer(): LineBuffer
+export function createLineBuffer<T>(parse: (line: string) => T, oversized: T): LineBuffer<T>
+export function createLineBuffer<T>(
+  parse: (line: string) => T = parseFrame as (line: string) => T,
+  oversized: T = OVERSIZED as T
+): LineBuffer<T> {
   let tail = ''
   let isSkipping = false
   return {
@@ -109,7 +115,7 @@ export function createLineBuffer(): LineBuffer {
           if (tail.length > MAX_LINE_CHARS) {
             tail = ''
             isSkipping = true
-            yield OVERSIZED
+            yield oversized
           }
           return
         }
@@ -119,9 +125,9 @@ export function createLineBuffer(): LineBuffer {
         if (isSkipping) {
           isSkipping = false
         } else if (line.length > MAX_LINE_CHARS) {
-          yield OVERSIZED
+          yield oversized
         } else if (line.trim() !== '') {
-          yield parseFrame(line.trimEnd())
+          yield parse(line.trimEnd())
         }
       }
     }

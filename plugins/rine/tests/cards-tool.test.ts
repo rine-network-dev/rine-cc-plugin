@@ -14,11 +14,11 @@ for (const surface of SURFACES) {
     seedUi(on)
     const rows = [
       messageRow(),
-      messageRow({ sender_handle: 'carol@acme.rine.network', type: 'rine.v1.task', group_handle: '#ops@acme.rine.network' })
+      messageRow({ sender_handle: 'carol@acme.rine.network', type: 'rine.v1.task', group_handle: '#ops@acme' })
     ]
     const ui = await mount($, toolName('rine_inbox'), inboxOutput(rows))
-    expect(await ui.find({ type: 'Text', text: '● bob@acme.rine.network ✓ · dm · 2m · hpke-v1' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '● carol@acme.rine.network ✓ · task · #ops@acme.rine.network · 2m · hpke-v1' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '● bob@acme.rine.network ✓ · dm · 2m · hpke-hybrid-v2' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '● carol@acme.rine.network ✓ · task · #ops@acme · 2m · hpke-hybrid-v2' })).toBeDefined()
     const buttons = await ui.findAll({ type: 'Button' })
     expect(buttons).toHaveLength(1)
     expect(buttons[0]?.props.label).toBe('raw')
@@ -38,7 +38,7 @@ for (const surface of SURFACES) {
   test(`test_card_read_drawsHeaderAndBody_on_${surface}`, async ($, on) => {
     seedUi(on)
     const ui = await mount($, toolName('rine_read'), readOutput())
-    expect(await ui.find({ type: 'Text', text: 'bob@acme.rine.network · verified ✓ · dm · hpke-v1' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'bob@acme.rine.network · verified ✓ · dm · hpke-hybrid-v2' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: '│ Can you rebase the branch?' })).toBeDefined()
     await ui.unmount()
     const other = await mount($, toolName('rine_read'), readOutput({ verified: false }))

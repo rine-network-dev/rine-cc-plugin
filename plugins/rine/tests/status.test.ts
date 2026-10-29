@@ -13,10 +13,10 @@ function base(overrides: Overrides = {}): StatusInput {
     isDetecting: false,
     mode: 'ready',
     identity: {
-      handle: 'alice@acme',
+      handle: 'alice@acme.rine.network',
       agentId: 'a-1',
       configDir: '/cfg',
-      cliVersion: '0.20.0',
+      cliVersion: '0.22.0',
       isBelowFloor: false,
       isStateWritable: true,
       ...identity
@@ -109,6 +109,11 @@ test('test_statusText_live_showsHandleWithAndWithoutUnread', async () => {
   expect(statusText(base({ unread: 5 }))).toBe('rine \u25cf alice@acme · 5 unread')
 })
 
+test('test_statusText_lookalikeDomain_keepsTheHandleWhole', async () => {
+  const handle = 'alice@acme.rine.network.evil.io'
+  expect(statusText(base({ identity: { handle } }))).toBe(`rine \u25cf ${handle}`)
+})
+
 test('test_statusText_liveWithoutHandle_saysUnknown', async () => {
   expect(statusText(base({ identity: { handle: null } }))).toBe('rine \u25cf unknown')
 })
@@ -124,7 +129,7 @@ test('test_statusText_failurePhaseWithMuteAndPreview_hidesBoth', async () => {
 
 test('test_statusText_belowFloor_appendsCliSuffix', async () => {
   const input = base({ identity: { isBelowFloor: true, cliVersion: '0.19.0' } })
-  expect(statusText(input)).toBe('rine \u25cf alice@acme · CLI 0.19.0 < 0.20.0')
+  expect(statusText(input)).toBe('rine \u25cf alice@acme · CLI 0.19.0 < 0.22.0')
 })
 
 test('test_statusText_stateReadOnly_appendsSuffix', async () => {

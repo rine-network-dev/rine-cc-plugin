@@ -1,0 +1,6 @@
+{
+  "name": "spike-client",
+  "version": "0.0.1",
+  "description": "Client-surface spike: a Client surface module in a pane, to measure key delivery, module memory and plaintext exposure. Not shipped.",
+  "types": "./types/index.d.ts"
+}

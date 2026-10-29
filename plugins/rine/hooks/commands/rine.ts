@@ -5,6 +5,7 @@ import { counts } from '../lib/ledger'
 import { parseHandle, type ListName } from '../lib/lists'
 import type { MuteSpec } from '../lib/prefs'
 import { safeLine } from '../lib/sanitize'
+import { fittedHandle } from '../lib/shown-handle'
 import { createActions, INBOX_PANE, placementNote, type UiEnv } from '../ui/pane-actions'
 
 const entriesRef = { plugin: 'rine', key: 'entries' } as const
@@ -12,7 +13,7 @@ const listsRef = { plugin: 'rine', key: 'lists' } as const
 const trustedRef = { plugin: 'rine', key: 'isListsTrusted' } as const
 
 export const USAGE =
-  'usage: /rine [mute [1h|8h|off-hours|forever] | unmute | preview on|off | allow|deny add|remove <handle|#group> | ' +
+  'usage: /rine [mute [1h|8h|off-hours|forever] | unmute | preview on|off | motion on|off | allow|deny add|remove <handle|#group> | ' +
   'allow|deny list | reconnect | takeover]. Changes run only at your own keyboard, not over Remote Control.'
 
 export type Command =
@@ -20,6 +21,7 @@ export type Command =
   | { kind: 'mute'; spec: MuteSpec }
   | { kind: 'unmute' }
   | { kind: 'preview'; isOn: boolean }
+  | { kind: 'motion'; isOn: boolean }
   | { kind: 'edit'; name: ListName; op: 'add' | 'remove'; raw: string }
   | { kind: 'show'; name: ListName }
   | { kind: 'reconnect' }
@@ -38,6 +40,7 @@ export function parseCommand(args: string): Command {
     return spec === undefined ? { kind: 'usage' } : { kind: 'mute', spec }
   }
   if (sub === 'preview' && (first === 'on' || first === 'off')) return { kind: 'preview', isOn: first === 'on' }
+  if (sub === 'motion' && (first === 'on' || first === 'off')) return { kind: 'motion', isOn: first === 'on' }
   if (list !== undefined && first === 'list') return { kind: 'show', name: list }
   if (list !== undefined && (first === 'add' || first === 'remove') && second !== '' && rest.length === 0) {
     return { kind: 'edit', name: list, op: first, raw: second }
@@ -47,14 +50,14 @@ export function parseCommand(args: string): Command {
 }
 
 /** Only the person's own keystroke changes mutes, preview, lists or the lease. */
-const MUTATING: ReadonlySet<Command['kind']> = new Set(['mute', 'unmute', 'preview', 'edit', 'takeover'])
+const MUTATING: ReadonlySet<Command['kind']> = new Set(['mute', 'unmute', 'preview', 'motion', 'edit', 'takeover'])
 
 export function isMutating(command: Command): boolean {
   return MUTATING.has(command.kind)
 }
 
 function listText(name: ListName, entries: readonly RineListEntry[], isTrusted: boolean): string {
-  const names = entries.map((entry) => safeLine(entry.handle, 64)).join(', ')
+  const names = entries.map((entry) => fittedHandle(entry.handle, 64)).join(', ')
   const note = name === 'allow' && !isTrusted ? ' (changed outside /rine: review in the inbox pane before it wakes Claude)' : ''
   return `${name} list (${entries.length}): ${names === '' ? 'empty' : names}${note}`
 }
@@ -63,7 +66,7 @@ function listText(name: ListName, entries: readonly RineListEntry[], isTrusted: 
 export const RINE_COMMAND = {
   name: 'rine',
   description: 'Open the rine inbox, or mute, preview, allow and deny',
-  argumentHint: '[mute|unmute|preview|allow|deny|reconnect|takeover]',
+  argumentHint: '[mute|unmute|preview|motion|allow|deny|reconnect|takeover]',
   immediate: true
 } as const
 
@@ -84,6 +87,8 @@ export const registerRine = (on: Parameters<Register>[0], env: UiEnv): void => {
         return { text: await actions.unmute() }
       case 'preview':
         return { text: await actions.setPreview(command.isOn, counts((await read($, entriesRef)) ?? []).held) }
+      case 'motion':
+        return { text: await actions.setMotion(command.isOn) }
       case 'edit': {
         const entry = parseHandle(command.raw)
         if (entry === null) return { text: `${safeLine(command.raw, 40)} is not a handle: use name@org or #group@org.` }

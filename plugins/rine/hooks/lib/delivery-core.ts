@@ -1,4 +1,5 @@
-import type { RineEntry, RineIdentity, RineMode, RinePreview } from '../../types/index'
+import type { RineEntry, RineIdentity, RineMode } from '../../types/index'
+import type { PreviewSetter } from './preview'
 import type { ListsView } from './lists'
 import type { NoteEntry } from './model-text'
 
@@ -24,7 +25,7 @@ export type DeliveryStore = {
   read: () => Promise<DeliveryView>
   updateEntries: (edit: (entries: readonly RineEntry[]) => RineEntry[]) => Promise<void>
   patch: (changes: Partial<DeliveryFlags>) => Promise<void>
-  setPreview: (id: string, preview: RinePreview) => Promise<void>
+  setPreview: PreviewSetter
 }
 
 /** Raises the toast for one arrival; the toaster batches and appends the system notice. */

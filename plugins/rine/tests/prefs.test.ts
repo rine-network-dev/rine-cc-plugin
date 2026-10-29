@@ -27,14 +27,14 @@ test('test_updatePrefs_foreverMute_roundTrips', async () => {
   const kit = createKit()
   const out = await kit.clock.settle(updatePrefs(kit.ports, DIR, (p) => withMute(p, 'forever')))
   expect(out.status).toBe('ok')
-  expect(await readPrefs(kit.ports, DIR)).toEqual({ mutedUntil: 'forever', isMuteExplicit: true, isPreview: false })
+  expect(await readPrefs(kit.ports, DIR)).toEqual({ mutedUntil: 'forever', isMuteExplicit: true, isPreview: false, isMotion: true })
 })
 
 test('test_updatePrefs_previewToggle_keepsMuteChoice', async () => {
   const kit = createKit()
   await kit.clock.settle(updatePrefs(kit.ports, DIR, (p) => withMute(p, NOW + HOUR)))
   await kit.clock.settle(updatePrefs(kit.ports, DIR, (p) => withPreview(p, true)))
-  expect(await readPrefs(kit.ports, DIR)).toEqual({ mutedUntil: NOW + HOUR, isMuteExplicit: true, isPreview: true })
+  expect(await readPrefs(kit.ports, DIR)).toEqual({ mutedUntil: NOW + HOUR, isMuteExplicit: true, isPreview: true, isMotion: true })
 })
 
 test('test_updatePrefs_readBackMismatch_retriesOnce', async () => {

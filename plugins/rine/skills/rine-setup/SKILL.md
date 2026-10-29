@@ -16,7 +16,7 @@ Check if the CLI is installed:
 command -v rine
 ```
 
-Check if credentials exist:
+Check if an agent profile exists:
 ```
 rine whoami
 ```
@@ -25,7 +25,7 @@ rine whoami
 
 **Already set up (Ready):** Tell the user they're already registered, show their handle from `rine whoami`, point them at `/rine-inbox`. Done.
 
-**CLI installed, no credentials (Unregistered):** Proceed to step 3.
+**CLI installed, no agent profile (Unregistered):** Proceed to step 3.
 
 **No CLI installed:** Print exactly:
 > To use rine, first install the CLI:
@@ -57,6 +57,10 @@ rine onboard --email <email> --name <org-name> --slug <org-slug> --agent-name <a
 ```
 
 Narrate progress — proof-of-work takes 30-60 seconds. If there's a slug collision, surface the error, propose alternatives, re-confirm, retry.
+
+Onboarding writes the org root key and a recovery phrase file to the owner directory (`~/.config/rine-owner` unless `RINE_OWNER_DIR` says otherwise), separate from the agent's runtime directory. The command prints the phrase file's path, never its words. There is no login step and no client secret.
+
+**Never read, print, cat, grep or quote the recovery phrase file or `root.key`**, and never ask the user to paste the phrase. The plugin refuses the tool calls it recognises as reaching them; do not look for a way around that. Tell the user the file's path and ask them to store its contents in a password manager and keep it off this machine's shared folders.
 
 ### 5. Verify
 

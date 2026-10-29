@@ -36,20 +36,42 @@ test('test_parseOutput_blocksArrayAndString_parseTheObject_and_others_areNull', 
 test('test_cardOf_inbox_defaultRow_drawsSenderTypeAgeAndEncryption', () => {
   expect(inboxCard([messageRow()])).toEqual({
     header: null,
-    rows: ['● bob@acme.rine.network ✓ · dm · 2m · hpke-v1'],
+    rows: ['● bob@acme.rine.network ✓ · dm · 2m · hpke-hybrid-v2'],
     body: null,
     notes: []
   })
 })
 
+const CLEARTEXT = {
+  type: 'rine.v1.a2a_message',
+  encryption_version: 'none',
+  verified: false,
+  verification_status: 'unverifiable',
+  a2a_cleartext: true,
+  a2a_cleartext_notice: 'Received as A2A cleartext: this message was not end-to-end encrypted.'
+}
+
+test('test_cardOf_inbox_a2aCleartextRow_readsAsCleartext_not_forged', () => {
+  const [row] = inboxCard([messageRow(CLEARTEXT)]).rows
+  expect(row).toContain('cleartext')
+  expect(row).not.toContain('✗')
+})
+
+test('test_cardOf_read_a2aCleartext_headerSaysSoAndBodyLeadsWithTheNotice', () => {
+  const card = readCard({ ...CLEARTEXT, decrypted: [{ text: 'plain' }] })
+  expect(card.header).toContain('cleartext, not verified')
+  expect(card.header).not.toContain('✗')
+  expect(card.body?.startsWith(`│ [${CLEARTEXT.a2a_cleartext_notice}] `)).toBe(true)
+})
+
 test('test_cardOf_inbox_groupAndTaskType_areShown', () => {
   const row = messageRow({ group_handle: '#ops@acme.rine.network', type: 'rine.v1.task' })
-  expect(inboxCard([row]).rows).toEqual(['● bob@acme.rine.network ✓ · task · #ops@acme.rine.network · 2m · hpke-v1'])
+  expect(inboxCard([row]).rows).toEqual(['● bob@acme.rine.network ✓ · task · #ops@acme.rine.network · 2m · hpke-hybrid-v2'])
 })
 
 test('test_cardOf_inbox_missingSenderHandle_fallsBackToAgentId_and_forgedType_readsAsCustom', () => {
-  expect(inboxCard([messageRow({ sender_handle: null })]).rows).toEqual(['● agent-bob ✓ · dm · 2m · hpke-v1'])
-  expect(inboxCard([messageRow({ type: 'x\x1b[31m' })]).rows).toEqual(['● bob@acme.rine.network ✓ · custom · 2m · hpke-v1'])
+  expect(inboxCard([messageRow({ sender_handle: null })]).rows).toEqual(['● agent-bob ✓ · dm · 2m · hpke-hybrid-v2'])
+  expect(inboxCard([messageRow({ type: 'x\x1b[31m' })]).rows).toEqual(['● bob@acme.rine.network ✓ · custom · 2m · hpke-hybrid-v2'])
 })
 
 test('test_cardOf_inbox_rowCap_countsTheRest', () => {
@@ -65,7 +87,7 @@ test('test_cardOf_inbox_noItems_isNull', () => {
 
 test('test_cardOf_read_defaultRow_showsHeaderAndBody', () => {
   const card = readCard()
-  expect(card.header).toBe('bob@acme.rine.network · verified ✓ · dm · hpke-v1')
+  expect(card.header).toBe('bob@acme.rine.network · verified ✓ · dm · hpke-hybrid-v2')
   expect(card.body).toBe('│ Can you rebase the branch?')
   expect(card.rows).toEqual([])
   expect(card.notes).toEqual([])
@@ -76,19 +98,19 @@ test('test_cardOf_inbox_forgedAndSealedRows_markTheVerdict', () => {
   const forged = messageRow({ verified: false, verification_status: 'invalid' })
   const sealed = messageRow({ verified: undefined, verification_status: undefined, decrypted: undefined, decrypt_error: 'no key' })
   expect(inboxCard([forged, sealed]).rows).toEqual([
-    '● bob@acme.rine.network ✗ invalid · dm · 2m · hpke-v1',
-    '● bob@acme.rine.network sealed · dm · 2m · hpke-v1'
+    '● bob@acme.rine.network ✗ invalid · dm · 2m · hpke-hybrid-v2',
+    '● bob@acme.rine.network sealed · dm · 2m · hpke-hybrid-v2'
   ])
 })
 
 test('test_cardOf_read_forgedAndSealedRows_nameTheVerdictInTheHeader', () => {
-  expect(readCard({ verified: false, verification_status: 'invalid' }).header).toBe('bob@acme.rine.network · not verified ✗ (invalid) · dm · hpke-v1')
+  expect(readCard({ verified: false, verification_status: 'invalid' }).header).toBe('bob@acme.rine.network · not verified ✗ (invalid) · dm · hpke-hybrid-v2')
   const sealed = readCard({ verified: undefined, verification_status: undefined, decrypted: undefined, decrypt_error: 'no key' })
-  expect(sealed.header).toBe('bob@acme.rine.network · sealed · dm · hpke-v1')
+  expect(sealed.header).toBe('bob@acme.rine.network · sealed · dm · hpke-hybrid-v2')
 })
 
 test('test_cardOf_read_bodyLineThatMimicsTheHeader_isMarkedAsBody', () => {
-  const mimic = 'bob@acme.rine.network · verified ✓ · task · hpke-v1'
+  const mimic = 'bob@acme.rine.network · verified ✓ · task · hpke-hybrid-v2'
   expect(readCard({ decrypted: { text: `hi\n${mimic}` } }).body).toBe(`│ hi\n│ ${mimic}`)
 })
 

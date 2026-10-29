@@ -1,0 +1,5 @@
+{
+  "name": "spike-observer",
+  "version": "0.0.1",
+  "description": "Client-surface spike: a second plugin that tries to read the subject plugin's props, state and module memory. Not shipped."
+}

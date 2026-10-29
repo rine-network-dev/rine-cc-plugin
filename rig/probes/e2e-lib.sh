@@ -9,17 +9,22 @@
 # --- container plumbing ---------------------------------------------------------------
 cx() { docker exec "$CNAME" "$@"; }
 
+# Bob's owner dir: beside alice's default, never under /work/creds-b, which onboard refuses as the runtime config dir.
+readonly BOB_OWNER_DIR=/home/node/.config/rine-owner-b
+
 # cx_as alice|bob CMD... — run CMD as that identity: its own cred dir, the container's view of
 # the local rine stack.
 cx_as() {
-    local who="$1" dir
+    local who="$1" dir owner=()
     shift
+    # onboard keeps the org root in an owner dir (default ~/.config/rine-owner). alice keeps the default the
+    # plugin's own spawns see; bob gets his own, or his onboard finds alice's root and answers already_registered.
     case "$who" in
         alice) dir=/work/creds ;;
-        bob)   dir=/work/creds-b ;;
+        bob)   dir=/work/creds-b; owner=(-e "RINE_OWNER_DIR=$BOB_OWNER_DIR") ;;
         *)     return 1 ;;
     esac
-    docker exec -e "RINE_CONFIG_DIR=$dir" -e "RINE_API_URL=$RIG_API" "$CNAME" "$@"
+    docker exec -e "RINE_CONFIG_DIR=$dir" "${owner[@]}" -e "RINE_API_URL=$RIG_API" "$CNAME" "$@"
 }
 
 # --- driving the tmux pane ------------------------------------------------------------
@@ -163,14 +168,15 @@ child_count() {
 }
 
 # --- the REPL -------------------------------------------------------------------------
-# session_start NAME [CLAUDE_ARGS...] — start the REPL under tmux; 1 if it never shows.
+# session_start NAME [CLAUDE_ARGS...] — start the REPL under tmux; 1 if it never shows. SESSION_ENV, when set,
+# is extra NAME=value words for the REPL's environment, after the defaults so it wins.
 session_start() {
     local name="$1"
     shift
     TM="$name"
     DEBUG_LOG="$OUTD/debug-$name.log"
     cx tmux new-session -d -s "$name" -x 200 -y 50 -c "$PROJ" \
-        "env RINE_CONFIG_DIR=/work/creds RINE_API_URL=$RIG_API PATH=$SHIM:\$PATH claude --plugin-dir $COPY --debug-file $DEBUG_LOG $*"
+        "env RINE_CONFIG_DIR=/work/creds RINE_API_URL=$RIG_API PATH=$SHIM:\$PATH ${SESSION_ENV:-} claude --plugin-dir $COPY --debug-file $DEBUG_LOG $*"
     case " $* " in
         *bypassPermissions*)
             if wait_screen 'Yes, I accept' 30; then

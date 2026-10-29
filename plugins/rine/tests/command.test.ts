@@ -13,6 +13,9 @@ const TABLE: readonly [string, Command][] = [
   ['preview on', { kind: 'preview', isOn: true }],
   ['preview off', { kind: 'preview', isOn: false }],
   ['preview', { kind: 'usage' }],
+  ['motion off', { kind: 'motion', isOn: false }],
+  ['motion on', { kind: 'motion', isOn: true }],
+  ['motion', { kind: 'usage' }],
   ['allow add bob@acme', { kind: 'edit', name: 'allow', op: 'add', raw: 'bob@acme' }],
   ['deny remove #ops@acme', { kind: 'edit', name: 'deny', op: 'remove', raw: '#ops@acme' }],
   ['allow add', { kind: 'usage' }],
@@ -32,7 +35,7 @@ for (const [args, expected] of TABLE) {
 
 test('test_isMutating_onlyKeyboardOnlyKinds', () => {
   const mutating = TABLE.filter(([, command]) => isMutating(command)).map(([, command]) => command.kind)
-  expect(new Set(mutating)).toEqual(new Set(['mute', 'unmute', 'preview', 'edit', 'takeover']))
+  expect(new Set(mutating)).toEqual(new Set(['mute', 'unmute', 'preview', 'motion', 'edit', 'takeover']))
 })
 
 const run = ($: Engine, args: string, origin?: unknown) =>
@@ -41,7 +44,7 @@ const run = ($: Engine, args: string, origin?: unknown) =>
 for (const kind of ['bridge', 'plugin']) {
   test(`test_command_mutatingRow_fromOrigin_${kind}_isRefused`, async ($, on) => {
     seedUi(on)
-    for (const args of ['mute', 'unmute', 'preview on', 'allow add bob@acme', 'takeover']) {
+    for (const args of ['mute', 'unmute', 'preview on', 'motion off', 'allow add bob@acme', 'takeover']) {
       const out = await run($, args, { kind })
       expect(JSON.stringify(out)).toContain(`/rine ${args.split(' ')[0]} is for the user to run at the keyboard.`)
     }

@@ -3,6 +3,7 @@ import { isRecord, stringOrNull } from '../lib/narrow'
 import { payloadText } from '../lib/preview'
 import { TOOL_PATTERN } from '../lib/refs'
 import { safeBlock, safeLine, scrubNotes } from '../lib/sanitize'
+import { fittedHandle } from '../lib/shown-handle'
 import { formatDuration } from '../lib/status'
 
 export type CardTool = 'rine_inbox' | 'rine_read' | 'rine_discover'
@@ -61,12 +62,12 @@ function joinParts(parts: Array<string | null>): string {
 }
 
 function senderOf(item: Record<string, unknown>): string {
-  return safeLine(stringOrNull(item.sender_handle) ?? stringOrNull(item.from_agent_id) ?? 'unknown', 32)
+  return fittedHandle(stringOrNull(item.sender_handle) ?? stringOrNull(item.from_agent_id) ?? 'unknown', 32)
 }
 
 function groupOf(item: Record<string, unknown>): string | null {
   const group = stringOrNull(item.group_handle)
-  return group === null ? null : safeLine(group, 32)
+  return group === null ? null : fittedHandle(group, 32)
 }
 
 function encOf(item: Record<string, unknown>): string | null {
@@ -86,19 +87,26 @@ function statusOf(item: Record<string, unknown>): string | null {
   return status === null ? null : safeLine(status, 16)
 }
 
-type Verdict = { kind: 'verified' | 'forged' | 'sealed'; status: string | null }
+type Verdict = { kind: 'verified' | 'forged' | 'sealed' | 'cleartext'; status: string | null }
 
-/** A row that stayed sealed carries no `verified` at all, so absence is its own verdict. */
+/** A2A cleartext arrives with no signature, so it is told apart from a message that failed its check. */
 function verdictOf(item: Record<string, unknown>): Verdict {
   const status = statusOf(item)
+  if (item.a2a_cleartext === true) return { kind: 'cleartext', status }
   if (item.verified === true) return { kind: 'verified', status }
   if (item.verified === false) return { kind: 'forged', status }
   return { kind: 'sealed', status }
 }
 
+/** The sentence the CLI and MCP row carry for a cleartext message, or null for every other row. */
+function cleartextNoticeOf(item: Record<string, unknown>): string | null {
+  return item.a2a_cleartext === true ? stringOrNull(item.a2a_cleartext_notice) : null
+}
+
 function inboxMark(item: Record<string, unknown>): string {
   const { kind, status } = verdictOf(item)
   if (kind === 'verified') return '✓'
+  if (kind === 'cleartext') return 'cleartext'
   if (kind === 'forged') return status === null ? '✗' : `✗ ${status}`
   return 'sealed'
 }
@@ -106,6 +114,7 @@ function inboxMark(item: Record<string, unknown>): string {
 function readVerdict(item: Record<string, unknown>): string {
   const { kind, status } = verdictOf(item)
   if (kind === 'verified') return 'verified ✓'
+  if (kind === 'cleartext') return 'cleartext, not verified'
   if (kind === 'forged') return status === null ? 'not verified ✗' : `not verified ✗ (${status})`
   return 'sealed'
 }
@@ -143,7 +152,7 @@ function discoverRow(item: Record<string, unknown>, context: CardContext): strin
   const name = stringOrNull(item.name)
   const tier = typeof item.trust_tier === 'number' ? `tier ${item.trust_tier}` : null
   const parts = [
-    safeLine(stringOrNull(item.handle) ?? 'no handle', 40),
+    fittedHandle(stringOrNull(item.handle) ?? 'no handle', 40),
     name === null ? null : JSON.stringify(safeLine(name, 38)),
     tier
   ]
@@ -164,9 +173,10 @@ function readHeader(data: Record<string, unknown>, context: CardContext): string
 function readCard(data: Record<string, unknown>, context: CardContext): Card | null {
   if (stringOrNull(data.id) === null) return null
   const header = readHeader(data, context)
-  const shown = payloadText(data.decrypted) ?? stringOrNull(data.decrypt_error)
-  if (shown === null) return { header, rows: [], body: null, notes: [] }
-  const block = safeBlock(shown, READ_BODY_CHARS)
+  const text = payloadText(data.decrypted) ?? stringOrNull(data.decrypt_error)
+  if (text === null) return { header, rows: [], body: null, notes: [] }
+  const notice = cleartextNoticeOf(data)
+  const block = safeBlock(notice === null ? text : `[${notice}] ${text}`, READ_BODY_CHARS)
   const body = block.text.split('\n').map((line) => BODY_MARK + line).join('\n')
   return { header, rows: [], body, notes: scrubNotes(block.truncatedChars, block.hiddenChars) }
 }

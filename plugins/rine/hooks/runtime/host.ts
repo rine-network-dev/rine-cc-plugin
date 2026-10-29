@@ -1,12 +1,12 @@
 import type { PluginState } from 'claude-code'
-import type { RinePreview } from '../../types/index'
 import type { RealPath } from '../lib/guard'
 import type { Backend } from '../lib/ports'
+import type { PreviewSetter } from '../lib/preview'
 import type { SpawnStream } from '../lib/supervisor-run'
 
 export type Published = Partial<PluginState['rine']>
 export type Recalled = Pick<Published, 'entries' | 'mirrorSince' | 'leaseNonce' | 'permissionMode'>
-export type EnvName = 'rineConfigDir' | 'home' | 'claudeConfigDir'
+export type EnvName = 'rineConfigDir' | 'home' | 'claudeConfigDir' | 'ownerDir'
 export type Cancel = () => void
 
 /** Everything the runtime takes from the engine, as plain functions: `register.tsx` is the only file that holds `$`. */
@@ -16,7 +16,7 @@ export type Host = {
   publish: (patch: Published) => Promise<void>
   /** What `$.state` kept across a reload of this module. */
   recall: () => Promise<Recalled>
-  setPreview: (id: string, preview: RinePreview) => Promise<void>
+  setPreview: PreviewSetter
   realPath: RealPath
   /** The `$.store` digests of a lists-trust key. */
   loadDigests: (key: string) => Promise<readonly string[]>

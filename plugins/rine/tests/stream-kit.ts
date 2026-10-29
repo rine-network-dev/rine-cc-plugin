@@ -11,7 +11,7 @@ export type FakeChild = SpawnStream & {
   isReturned: boolean
 }
 
-function createChild(): FakeChild {
+export function createChild(): FakeChild {
   const queue: SpawnChunk[] = []
   let waiter: ((result: IteratorResult<SpawnChunk, unknown>) => void) | null = null
   let isEnded = false

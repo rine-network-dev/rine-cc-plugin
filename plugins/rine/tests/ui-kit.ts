@@ -19,6 +19,8 @@ export type Seeded = {
   calls: { server: string; tool: string; args: Record<string, unknown> }[]
   isPlaced: boolean
   isCallFailing: boolean
+  /** The props each render reached the engine's own component with, in order, as `<component>`. */
+  rendered: { component: string; props: Record<string, unknown> }[]
 }
 
 export function entry(over: Partial<RineEntry> = {}): RineEntry {
@@ -28,7 +30,7 @@ export function entry(over: Partial<RineEntry> = {}): RineEntry {
 const BASE = {
   identity: { handle: 'alice@acme.rine.network', agentId: 'agent-own', configDir: '/rine', cliVersion: '1.0.0', isBelowFloor: false, isStateWritable: true },
   stream: { phase: 'live', attempt: 0, lastFrameAt: NOW, nextRetryAt: null, ownerCwd: null, unreadable: 0 },
-  prefs: { mutedUntil: null, isMuteExplicit: false, isPreview: false },
+  prefs: { mutedUntil: null, isMuteExplicit: false, isPreview: false, isMotion: false },
   entries: [],
   lists: { allow: [], deny: [] },
   isListsTrusted: true,
@@ -37,7 +39,7 @@ const BASE = {
 
 /** Answers `$.state`, `$.ui.open`/`close`/`toast`, `$.mcp.call` and the clock beneath the plugin, and records what it was asked. */
 export function seedUi(on: On, over: Record<string, unknown> = {}): Seeded {
-  const seeded: Seeded = { values: { ...BASE, ...over }, sets: [], opens: [], closes: [], order: [], toasts: [], calls: [], isPlaced: true, isCallFailing: false }
+  const seeded: Seeded = { values: { ...BASE, ...over }, sets: [], opens: [], closes: [], order: [], toasts: [], calls: [], isPlaced: true, isCallFailing: false, rendered: [] }
   const slot = (e: { key: string; id?: string }): string => (e.id === undefined ? e.key : `${e.key}:${e.id}`)
   mock.clock(on, { now: NOW })
   on('state.get', async (_$, e) => ({ value: { value: seeded.values[slot(e)], version: 1 } }) as never)
@@ -64,6 +66,10 @@ export function seedUi(on: On, over: Record<string, unknown> = {}): Seeded {
     seeded.calls.push({ server: e.server, tool: e.tool, args: e.args })
     return { value: { content: [], isError: seeded.isCallFailing } } as never
   })
-  on('ui.render', async () => ({ type: 'Text', children: ['engine'] }) as never)
+  on('ui.render', async (_$, e) => {
+    seeded.rendered.push({ component: e.component, props: e.props as never })
+    return { type: 'Text', children: ['engine'] } as never
+  })
+  on('prompt.submit', async (_$, e) => ({ text: e.text }) as never)
   return seeded
 }

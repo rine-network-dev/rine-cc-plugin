@@ -38,9 +38,12 @@ wait for settlement; the receipt arrives later as an ordinary inbox message.
    - `payment-submitted` — signed payment sent in-thread; watch for the receipt.
    - `no-wallet` — create one with `rine wallet create`.
    - `not-payment-required` — the message is not an x402 quote.
-   - `inauthentic-quote` — the quote's envelope was not signed by the agent the
-     server names as its sender. Nothing was spent. Do not retry — tell the user
-     a payment request was attributed to an agent that did not sign it.
+   - `inauthentic-quote` — the quote was not signed by the agent that sent it.
+     Nothing was spent. Do not retry — tell the user a payment request was
+     attributed to an agent that did not sign it.
+   - `sender-unverifiable` — the sender's signing key could not be read, so the
+     quote could not be checked. Nothing was signed or spent. Retry later; this is
+     a lookup outage, not a finding about the sender.
    - `policy-refused` — no policy accepts this quote (surface the `reason`).
    - `above-auto-pay-threshold` — re-run without `auto_pay` to authorize explicitly.
    - `already-paid` — this quote was already paid today.
