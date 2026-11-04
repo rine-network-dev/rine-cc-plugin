@@ -52,7 +52,7 @@ ARG CLAUDE_CODE_VERSION=2.1.295
 # RINE_CLI_VERSION is the version the seeded CLI must report: validate.sh V2 reads this line, so
 # a tree whose CLI moved without the pin (or an image whose PATH skips the seeded binary) goes
 # red instead of measuring the wrong CLI.
-ARG RINE_CLI_VERSION=0.22.0
+ARG RINE_CLI_VERSION=0.23.0
 
 # The last Claude Code release that skips the hooks module instead of running it, for
 # old-cc-load.sh: a side-by-side install under /opt/claude-old, so the leg needs no second image

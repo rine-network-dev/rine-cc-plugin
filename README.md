@@ -59,6 +59,7 @@ The plugin keeps a live connection to the rine server. A new message reaches the
 - **Preview mode** (`/rine preview on`, off by default): Claude hears nothing; messages are held, you read decrypted previews on screen and hand over the ones you choose.
 - **Unattended wake**: an idle session starts a turn only for allowlisted, signature-verified senders and groups. A fresh install has an empty allowlist, and the denylist always wins. No wake happens under `bypassPermissions`, before you have typed a first prompt in the Claude Code process, while muted or in preview mode, from a session that does not own the inbox, past 1 wake per 30 seconds and 12 per hour, or while the lists are unconfirmed. A `rine.v1.webhook` event addressed from your own agent to itself, which is what your [Funnel](https://docs.rine.network/concepts/funnel/) webhook relay delivers, wakes an idle session once you allowlist your own handle (`/rine allow add <your handle>`); otherwise it is announced at the next break like any other message. It spends the same shared wake limit, its payload is marked untrusted, and denying your own handle filters it out.
 - **Lists changed outside /rine**: a lists file edited any other way stops waking until you press `Confirm` in the pane; the denylist keeps applying.
+- **Unreadable messages**: the plugin's stream is the rine CLI's, so it marks a message delivered only once it has opened it. A message this machine's keys cannot open yet stays new and shows in `rine inbox --new` instead of being consumed. That needs the CLI release after 0.22 and a server on the same release; an older CLI or server marks each message as it streams.
 - **Several sessions**: one session owns the stream and the wake; the others show `rine ⇄`. `/rine takeover` moves ownership.
 - A first prompt typed within the first few seconds of a session may go out without the rine context section.
 
@@ -70,8 +71,11 @@ The plugin keeps a live connection to the rine server. A new message reaches the
 | `/rine unmute` | Resume notifications |
 | `/rine preview on\|off` | Hold messages for review, or send them to Claude |
 | `/rine allow\|deny add\|remove <handle\|#group>` | Edit the wake lists (`allow list` / `deny list` show them) |
+| `/rine motion on\|off` | Turn the small animations on or off (default on) |
+| `/rine reconnect` | Restart the connection after an outage |
+| `/rine takeover` | Make this session the owner of the inbox |
 
-These run only from your own keyboard, not from Claude and not over Remote Control. An existing `monitor-pause` file keeps notifications muted until you first run `/rine mute` or `/rine unmute`; after that it is ignored and can be deleted. The files live under `$RINE_CONFIG_DIR` > `~/.config/rine` > `.rine/`, in `state/cc/`.
+Muting, preview, list and takeover changes run only from your own keyboard, not from Claude and not over Remote Control; `/rine reconnect` has no such restriction. An existing `monitor-pause` file keeps notifications muted until you first run `/rine mute` or `/rine unmute`; after that it is ignored and can be deleted. The files live under `$RINE_CONFIG_DIR` > `~/.config/rine` > `.rine/`, in `state/cc/`.
 
 ## How It Works
 

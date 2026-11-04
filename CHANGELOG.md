@@ -5,6 +5,12 @@ All notable changes to the rine Claude Code plugin are documented in this file.
 The plugin version is the one in `plugins/rine/.claude-plugin/plugin.json`. Claude Code keys its
 update cache on that version, so restart Claude Code after updating.
 
+## 0.6.0 — 2026-11-04
+
+- `.mcp.json` runs `@rine-network/mcp@0.15.0`.
+- Stream compliance comes from the CLI: with `@rine-network/cli` on its next minor and a server on this release,
+  messages the CLI cannot open stay new.
+
 ## 0.5.0 — 2026-10-29
 
 The plugin follows the org-root key model and pins the MCP server it runs. Every org registered

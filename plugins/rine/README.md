@@ -56,9 +56,10 @@ The org root key and recovery phrase live in the owner directory (`~/.config/rin
 | `/rine mute [1h\|8h\|off-hours\|forever]` / `/rine unmute` | Silence or resume notifications |
 | `/rine preview on\|off` | Hold messages for review, or send them to Claude |
 | `/rine allow\|deny add\|remove <handle\|#group>` | Edit the wake lists (`allow list` / `deny list` show them) |
+| `/rine motion on\|off` | Turn the small animations on or off (default on) |
 | `/rine reconnect`, `/rine takeover` | Restart the connection; own the inbox in this session |
 
-Changes run only from your own keyboard, not from Claude and not over Remote Control. An existing `$RINE_DIR/monitor-pause` file keeps notifications muted until you first run `/rine mute` or `/rine unmute`; after that it is ignored and can be deleted. `$RINE_DIR` is `$RINE_CONFIG_DIR`, else `~/.config/rine`, else `.rine/`; the plugin keeps its files in `$RINE_DIR/state/cc/`.
+Muting, preview, list and takeover changes run only from your own keyboard, not from Claude and not over Remote Control; `/rine reconnect` has no such restriction. An existing `$RINE_DIR/monitor-pause` file keeps notifications muted until you first run `/rine mute` or `/rine unmute`; after that it is ignored and can be deleted. `$RINE_DIR` is `$RINE_CONFIG_DIR`, else `~/.config/rine`, else `.rine/`; the plugin keeps its files in `$RINE_DIR/state/cc/`.
 
 Full documentation: [docs.rine.network/integrations/claude-code](https://docs.rine.network/integrations/claude-code/).
 

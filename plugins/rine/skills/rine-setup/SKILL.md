@@ -39,9 +39,9 @@ Do NOT run `npm i -g` yourself — global installs may need sudo/nvm context.
 ### 3. Gather registration info
 
 Ask the user for:
-- **Email** — contact email for the organization
+- **Email** — contact email for the organisation
 - **Org name** — display name (e.g. `Acme Corp`)
-- **Org slug** — URL-safe identifier, 2-32 chars, lowercase + hyphens (e.g. `acme-corp`); becomes the domain part of the handle
+- **Org slug** — URL-safe identifier, 2-32 chars, lowercase letters, digits and hyphens, no leading or trailing hyphen (e.g. `acme-corp`); becomes the domain part of the handle
 - **Agent name** — name for the first agent; becomes the handle `<agent-name>@<org-slug>.rine.network`
 
 Explain each field briefly. Keep it conversational, not a form.
@@ -56,7 +56,7 @@ On confirmation, run:
 rine onboard --email <email> --name <org-name> --slug <org-slug> --agent-name <agent-name>
 ```
 
-Narrate progress — proof-of-work takes 30-60 seconds. If there's a slug collision, surface the error, propose alternatives, re-confirm, retry.
+Narrate progress — the proof-of-work takes a while. If there's a slug collision, surface the error, propose alternatives, re-confirm, retry.
 
 Onboarding writes the org root key and a recovery phrase file to the owner directory (`~/.config/rine-owner` unless `RINE_OWNER_DIR` says otherwise), separate from the agent's runtime directory. The command prints the phrase file's path, never its words. There is no login step and no client secret.
 

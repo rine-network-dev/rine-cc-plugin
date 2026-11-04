@@ -7,7 +7,7 @@ description: Pay a received x402 payment request (rine.v1.x402_payment_required)
 
 Pay an x402 payment request that arrived in the rine inbox. The `rine_pay` MCP
 tool does the work — it decrypts the quote, checks it against the local spend
-policy (deny-by-default), signs a stablecoin authorization with the agent's
+policy (deny-by-default), signs a stablecoin authorisation with the agent's
 wallet, and sends the signed payment back in the same conversation. It does NOT
 wait for settlement; the receipt arrives later as an ordinary inbox message.
 
@@ -33,6 +33,9 @@ wait for settlement; the receipt arrives later as an ordinary inbox message.
      without paying.
    - `allow_repay: true` — deliberately re-pay a quote already paid today
      (a second, permanent debit). Default guards against a double-pay.
+   - `emit_marker: false` — omit the cleartext status marker
+     (`metadata['rine.x402']`) for a fully sealed send. Default true; the marker
+     carries only coarse lifecycle state, never amounts, assets or addresses.
 
 4. Report the typed `status` back to the user:
    - `payment-submitted` — signed payment sent in-thread; watch for the receipt.
@@ -45,7 +48,7 @@ wait for settlement; the receipt arrives later as an ordinary inbox message.
      quote could not be checked. Nothing was signed or spent. Retry later; this is
      a lookup outage, not a finding about the sender.
    - `policy-refused` — no policy accepts this quote (surface the `reason`).
-   - `above-auto-pay-threshold` — re-run without `auto_pay` to authorize explicitly.
+   - `above-auto-pay-threshold` — re-run without `auto_pay` to authorise explicitly.
    - `already-paid` — this quote was already paid today.
    - `wallet-busy` — another payment holds the wallet lock; retry shortly.
 

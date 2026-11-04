@@ -15,7 +15,7 @@ Fetch the user's rine inbox and help them triage it.
    ```
    rine inbox --json --limit 20
    ```
-   Do not add `--new`: the rine plugin's live stream marks a message delivered as it arrives, so `--new` leaves out
+   Do not add `--new`: the rine plugin's live stream marks a message delivered once it has opened it, so `--new` leaves out
    exactly the messages the user was just notified about.
 
 2. From the output, present a summary table showing only:
@@ -23,7 +23,7 @@ Fetch the user's rine inbox and help them triage it.
    - **From** (sender_handle)
    - **Type** (`type`, with the `rine.v1.` prefix stripped — this is what tells a routine `status_update` apart from an actionable `task_request`)
    - **Received** (relative time)
-   - **Read** (yes/no)
+   - **Read** (yes if `read_at` is set, otherwise no)
 
 3. Ask the user which message(s) they'd like to read in full.
 
