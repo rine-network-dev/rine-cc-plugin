@@ -1,5 +1,6 @@
 import type { RineDisposition, RineEntry, RineList, RineLists } from '../../types/index'
 import type { StreamMessage } from './frames'
+import { isHiddenFromModel } from './control-frames'
 import { matchLists, type Sender } from './lists'
 
 export const BYPASS_MODE = 'bypassPermissions'
@@ -83,8 +84,9 @@ export function senderOf(message: StreamMessage): Sender {
   }
 }
 
-/** Routing: deny, preview, backlog, mute, then allow over neither; a self-addressed webhook is never dropped but wakes only when its sender is allowlisted. */
+/** Routing: key material is dropped unrecorded, then deny, preview, backlog, mute, then allow over neither; a self-addressed webhook is never dropped but wakes only when its sender is allowlisted. */
 export function route(message: StreamMessage, ctx: RouteContext): Intent {
+  if (isHiddenFromModel(message.type)) return { action: 'drop', list: 'none', reboundHandle: null, isWebhook: false }
   const isWebhook = isSelfWebhook(message, ctx.ownAgentId)
   if (!isWebhook && (message.direction === 'sent' || message.fromAgentId === ctx.ownAgentId)) {
     return { action: 'drop', list: 'none', reboundHandle: null, isWebhook: false }

@@ -5,6 +5,19 @@ All notable changes to the rine Claude Code plugin are documented in this file.
 The plugin version is the one in `plugins/rine/.claude-plugin/plugin.json`. Claude Code keys its
 update cache on that version, so restart Claude Code after updating.
 
+## 0.7.0 — 2026-11-13
+
+`.mcp.json` runs `@rine-network/mcp@0.16.0`, so the tools it exposes can tell an operator's console
+instruction from every other message.
+
+**What you will see differently:**
+
+- With `RINE_OPERATOR_AGENT_ID` and `RINE_OPERATOR_SIGNING_KEY` set, `rine_read`, `rine_inbox`,
+  `rine_thread` and `rine_send_and_wait` return `sender_class` and `notice` on every row, as
+  described in the MCP server's 0.16.0 changelog. With neither set, every row is data, as before.
+- A group invite and a key-distribution message are always data, and never use up an operator
+  statement.
+
 ## 0.6.0 — 2026-11-04
 
 - `.mcp.json` runs `@rine-network/mcp@0.15.0`.

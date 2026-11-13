@@ -110,6 +110,13 @@ test('test_entryLine_fullFields_matchesSpecShape', async () => {
   )
 })
 
+test('test_entryLine_groupInvite_isTheFixedSentenceNamingTheInviter', async () => {
+  const line = entryLine(entry({ type: 'rine.v1.group_invite', group: '#ops@acme.rine.network' }))
+  expect(line).toBe(
+    `- id 3f2a1c9e-0000-4000-8000-000000000001 ${DOT} Group invite from bob@acme.rine.network. Check your pending invites with rine_group_invites.`
+  )
+})
+
 test('test_entryLine_noGroupNoSent_omitsThem', async () => {
   const line = entryLine(entry())
   expect(line).not.toContain('group')

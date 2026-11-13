@@ -1,4 +1,5 @@
 import type { RineMode } from '../../types/index'
+import { groupInviteNotice, isGroupInvite } from './control-frames'
 import { RINE_CLI_TESTED_FLOOR } from './mode'
 import { modelType, quoteField, safeLine } from './sanitize'
 
@@ -34,6 +35,9 @@ function rawOrQuoted(value: string, pattern: RegExp): string {
 const SELF_TAG = 'self-addressed'
 
 export function entryLine(entry: NoteEntry): string {
+  if (isGroupInvite(entry.type)) {
+    return `- id ${rawOrQuoted(entry.id, SAFE_ID)} · ${groupInviteNotice(safeLine(entry.from, 48))}`
+  }
   const parts = [
     `- id ${rawOrQuoted(entry.id, SAFE_ID)}`,
     `from ${quoteField(entry.from)}`,

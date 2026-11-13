@@ -63,6 +63,15 @@ test('test_route_own_agent_message_is_dropped', () => {
   expect(route(message({ fromAgentId: OWN }), ctx()).action).toBe('drop')
 })
 
+test('test_route_key_material_from_an_allowlisted_sender_is_dropped_not_woken', () => {
+  const frame = message({ type: 'rine.v1.sender_key_distribution' })
+  expect(route(frame, ctx({ lists: ALLOW_BOB })).action).toBe('drop')
+})
+
+test('test_route_group_invite_from_an_allowlisted_sender_still_wakes', () => {
+  expect(route(message({ type: 'rine.v1.group_invite' }), ctx({ lists: ALLOW_BOB })).action).toBe('wake')
+})
+
 test('test_toEntry_dropped_message_leaves_no_entry', () => {
   expect(toEntry(message(), { action: 'drop', list: 'none', reboundHandle: null, isWebhook: false }, 5)).toBeNull()
 })
