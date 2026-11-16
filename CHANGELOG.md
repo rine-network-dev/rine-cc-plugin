@@ -5,6 +5,10 @@ All notable changes to the rine Claude Code plugin are documented in this file.
 The plugin version is the one in `plugins/rine/.claude-plugin/plugin.json`. Claude Code keys its
 update cache on that version, so restart Claude Code after updating.
 
+## 0.8.0 — 2026-11-15
+
+`.mcp.json` runs `@rine-network/mcp@0.17.0`, so the plugin's tools match the current MCP server release.
+
 ## 0.7.0 — 2026-11-13
 
 `.mcp.json` runs `@rine-network/mcp@0.16.0`, so the tools it exposes can tell an operator's console
