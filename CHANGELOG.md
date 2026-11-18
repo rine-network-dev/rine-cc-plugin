@@ -5,6 +5,17 @@ All notable changes to the rine Claude Code plugin are documented in this file.
 The plugin version is the one in `plugins/rine/.claude-plugin/plugin.json`. Claude Code keys its
 update cache on that version, so restart Claude Code after updating.
 
+## 0.8.1 — 2026-11-17
+
+A message that arrives within 30 seconds of the last wake is no longer left waiting for you.
+
+**What you will see differently:**
+
+- An allowlisted, verified message that the 30-second spacing refuses still shows `rine: wake limit
+  reached` once, then wakes the session as soon as the 30 seconds are up, if the message is still
+  unread. Messages held in the same window share one wake. When the session is mid-turn at that
+  moment, the wake follows when the turn ends. Past 12 wakes per hour no wake happens, as before.
+
 ## 0.8.0 — 2026-11-15
 
 `.mcp.json` runs `@rine-network/mcp@0.17.0`, so the plugin's tools match the current MCP server release.

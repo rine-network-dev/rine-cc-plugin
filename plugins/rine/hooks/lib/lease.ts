@@ -2,17 +2,15 @@ import { open, readSealed, writeSealed } from './envelope'
 import { isRecord } from './narrow'
 import type { Ports } from './ports'
 import { statePath } from './refs'
+import { recent } from './wake-limits'
 
 export const LEASE_TTL_MS = 30000
 export const RENEW_EVERY_MS = 10000
-export const WAKE_SPACING_MS = 30000
-export const WAKES_PER_HOUR = 12
 
 const UNKNOWN_FREE_MS = 30000
 const SETTLE_MS = 500
 const TAKEOVER_SETTLE_MS = 1000
 const CONTEND_JITTER_MS = 2000
-const HOUR_MS = 3600000
 
 export type LeaseRecord = {
   nonce: string
@@ -49,17 +47,6 @@ export type Lease = {
 export function newNonce(random: () => number): string {
   const word = (): string => Math.floor(random() * 0x100000000).toString(16).padStart(8, '0')
   return word() + word() + word() + word()
-}
-
-/** One wake per 30 s and 12 per rolling hour. */
-export function isWakeAllowed(wakes: readonly number[], now: number): boolean {
-  const last = wakes.reduce((latest, at) => Math.max(latest, at), 0)
-  if (now - last < WAKE_SPACING_MS) return false
-  return wakes.filter((at) => now - at < HOUR_MS).length < WAKES_PER_HOUR
-}
-
-function recent(wakes: readonly number[], now: number): number[] {
-  return wakes.filter((at) => now - at < HOUR_MS)
 }
 
 function normalizeLease(value: unknown): LeaseRecord | null {

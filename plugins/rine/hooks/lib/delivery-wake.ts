@@ -2,7 +2,8 @@ import type { RineEntry } from '../../types/index'
 import { toNote, type DeliveryStore, type Say } from './delivery-core'
 import { arrivalToast, downgradeToast, droppedToast, SUFFIX } from './delivery-toast'
 import type { Lease } from './lease'
-import { createChecker, type Candidate } from './delivery-check'
+import { createChecker, isStillWakeable, type Candidate } from './delivery-check'
+import { createTrailing } from './delivery-trailing'
 import { markHanded, patchEntries } from './ledger'
 import type { Sender } from './lists'
 import { settleQuietly } from './delivery-quiet'
@@ -52,23 +53,29 @@ export function createWaker(deps: WakeDeps): Waker {
   let waiting: Candidate[] = []
   let isDraining = false
   let hasToldUntrusted = false
+  /** Messages already told `wake limit reached`; a trailing retry that downgrades again stays quiet. */
+  const toldIds = new Set<string>()
   const checker = createChecker(deps)
   /** The text of a wake submitted whose own turn has not started: a turn that completes meanwhile is the person's. */
   let awaitedText: string | null = null
   /** Main turns started since the wake was submitted without matching it; bounds the wait so a missed match cannot pin `pendingWake`. */
   let turnsAhead = 0
 
+  /** The candidate with its notify row: appended once, so a later downgrade finds the index and adds no second row. */
+  const withRow = async (c: Candidate): Promise<Candidate> =>
+    c.entry.rowIndex !== null ? c : { ...c, entry: { ...c.entry, rowIndex: await deps.notifyRows([c.entry]) } }
+
   const downgrade = async (c: Candidate, reason: Downgrade): Promise<void> => {
     if (reason === 'denied' || reason === 'muted' || reason === 'preview') return settleQuietly(deps, c, reason)
-    if (c.entry.rowIndex === null) await deps.notifyRows([c.entry])
+    const held = await withRow(c)
+    if (reason === 'rate-limit') {
+      await trailing.defer(held)
+      if (toldIds.has(c.entry.id)) return
+      toldIds.add(c.entry.id)
+    }
     const isRepeat = reason === 'lists-untrusted' && hasToldUntrusted
     if (reason === 'lists-untrusted') hasToldUntrusted = true
     deps.say(c.entry, (isRepeat ? null : downgradeToast(reason, c.entry)) ?? arrivalToast(c.entry, null))
-  }
-
-  const isStillWakeable = async (c: Candidate): Promise<boolean> => {
-    const current = (await store.read()).entries.find((entry) => entry.id === c.entry.id)
-    return current !== undefined && current.state === 'unread' && current.disposition === 'notified'
   }
 
   const fire = async (batch: Candidate[]): Promise<void> => {
@@ -78,7 +85,7 @@ export function createWaker(deps: WakeDeps): Waker {
     }
     const ready: Candidate[] = []
     for (const c of batch) {
-      if (!(await isStillWakeable(c))) continue
+      if (!(await isStillWakeable(store, c))) continue
       const reason = await checker.recheck(c)
       if (reason === null) ready.push(c)
       else await downgrade(c, reason)
@@ -92,7 +99,7 @@ export function createWaker(deps: WakeDeps): Waker {
     if (result.isDropped) {
       awaitedText = null
       await store.patch({ pendingWake: false })
-      for (const c of ready) if (c.entry.rowIndex === null) await deps.notifyRows([c.entry])
+      for (const c of ready) await withRow(c)
       const first = ready[0]
       if (first !== undefined) deps.say(first.entry, droppedToast('wake', result.reason))
       return
@@ -119,7 +126,7 @@ export function createWaker(deps: WakeDeps): Waker {
         const ready: Candidate[] = []
         for (const c of batch) {
           try {
-            if (!(await isStillWakeable(c))) continue
+            if (!(await isStillWakeable(store, c))) continue
             const reason = await checker.check(c)
             if (reason === null) ready.push(c)
             else await downgrade(c, reason)
@@ -134,18 +141,22 @@ export function createWaker(deps: WakeDeps): Waker {
     }
   }
 
-  const attempt = (candidate: Candidate): void => {
-    queue.push(candidate)
+  const attemptAll = (candidates: readonly Candidate[]): void => {
+    queue.push(...candidates)
     if (isDraining) return
     isDraining = true
     void drain().catch(() => deps.log('rine: wake failed'))
   }
 
+  const watch = (candidate: Candidate): void => {
+    waiting.push(candidate)
+  }
+
+  const trailing = createTrailing({ ports, store, lease, attempt: attemptAll, watch, log: deps.log })
+
   return {
-    attempt,
-    watch: (candidate) => {
-      waiting.push(candidate)
-    },
+    attempt: (candidate) => attemptAll([candidate]),
+    watch,
     turnStart: async (event) => {
       if (event.agentId !== undefined) return
       if (awaitedText !== null) {
@@ -167,7 +178,7 @@ export function createWaker(deps: WakeDeps): Waker {
       if (event.reason === 'aborted') {
         await store.patch({ wakeCooldownUntil: (await ports.clock.now()) + ABORT_COOLDOWN_MS })
       } else if (event.reason === 'answer') {
-        for (const c of unseen) attempt(c)
+        for (const c of unseen) attemptAll([c])
       }
     },
     handOff: async (ids) => {

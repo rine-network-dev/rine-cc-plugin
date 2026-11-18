@@ -1,6 +1,7 @@
 import type { RineEntry } from '../../types/index'
 import type { DeliveryStore, DeliveryView } from './delivery-core'
-import { isWakeAllowed, type Lease } from './lease'
+import type { Lease } from './lease'
+import { isWakeAllowed } from './wake-limits'
 import { matchLists, type Sender } from './lists'
 import type { Ports } from './ports'
 import { verificationOf, type Reader } from './preview'
@@ -9,6 +10,12 @@ import { gateWake, type Downgrade, type Intent, type Verification, type WakeDisp
 export type Candidate = { entry: RineEntry; sender: Sender; intent: Intent; isInbound: boolean }
 
 type CheckDeps = { ports: Pick<Ports, 'clock'>; store: DeliveryStore; reader: Reader; lease: Pick<Lease, 'wakes'> }
+
+/** Still unread and notified: nothing has woken, read or filed the entry since. */
+export async function isStillWakeable(store: DeliveryStore, c: Candidate): Promise<boolean> {
+  const current = (await store.read()).entries.find((entry) => entry.id === c.entry.id)
+  return current !== undefined && current.state === 'unread' && current.disposition === 'notified'
+}
 
 export type Checker = {
   /** The arrival-time gate, reading the message when the gate asks to verify it. */

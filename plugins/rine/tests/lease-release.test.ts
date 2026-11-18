@@ -1,5 +1,6 @@
 import { test, expect } from 'claude-code/testing'
-import { isWakeAllowed, newNonce, WAKES_PER_HOUR, WAKE_SPACING_MS } from '../hooks/lib/lease'
+import { newNonce } from '../hooks/lib/lease'
+import { isWakeAllowed, WAKES_PER_HOUR, WAKE_SPACING_MS } from '../hooks/lib/wake-limits'
 import { createKit } from './kit'
 import { actor, LEASE_PATH as PATH, put } from './lease-kit'
 
